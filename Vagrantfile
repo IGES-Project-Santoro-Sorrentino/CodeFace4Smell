@@ -18,44 +18,58 @@ integration-scripts/install_cppstats.sh
 integration-scripts/setup_database.sh
 SCRIPT
 
+$checkVagrantFolder = <<SCRIPT
+echo "Contenuto di /vagrant:"
+ls -la /vagrant || echo "⚠️  /vagrant NON montata!"
+SCRIPT
+
 Vagrant.configure("2") do |config|
-  # Hmm... no Debian image available yet, let's use a derivate
-  # Ubuntu 12.04 LTS (Precise Pangolin)
+    config.vm.provider "docker" do |d|
+        d.build_dir = "."                    # usa il Dockerfile
+        d.has_ssh = true
+    end
 
- config.vm.provider :virtualbox do |vbox, override|
-    override.vm.box = "precise64"
-    override.vm.box_url = "http://files.vagrantup.com/precise64.box"
+    config.vm.boot_timeout = 60
+    config.vm.communicator = "ssh"
 
-    vbox.customize ["modifyvm", :id, "--memory", "4096"]
-    vbox.customize ["modifyvm", :id, "--cpus", "2"]
-  end
+    # Needed to connect via ssh
+    config.vm.network :forwarded_port, guest: 22, host: 2222
 
-  config.vm.provider :lxc do |lxc, override|
-     override.vm.box = "fgrehm/precise64-lxc"
-  end
+    # Forward main web ui (8081) and testing (8100) ports
+    config.vm.network :forwarded_port, guest: 8081, host: 8081
+    config.vm.network :forwarded_port, guest: 8100, host: 8100
 
-  # Forward main web ui (8081) and testing (8100) ports
-  config.vm.network :forwarded_port, guest: 8081, host: 8081
-  config.vm.network :forwarded_port, guest: 8100, host: 8100
+    config.ssh.username = "vagrant"
 
-  config.vm.provision "fix-no-tty", type: "shell" do |s|
-    s.privileged = true
-    s.inline = "sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
-  end
+    config.vm.provision "fix-no-tty", type: "shell" do |s|
+        s.privileged = false
+        s.inline = "sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
+    end
 
-  config.vm.provision "local-mirror", type: "shell" do |s|
-    s.privileged = true
-    s.inline = "sed -i 's|http://[a-z\.]*\.ubuntu\.com/ubuntu|mirror://mirrors\.ubuntu\.com/mirrors\.txt|' /etc/apt/sources.list"
-  end
+    config.vm.provision "local-mirror", type: "shell" do |s|
+        s.privileged = false
+        s.inline = "sed -i 's|http://[a-z\.]*\.ubuntu\.com/ubuntu|mirror://mirrors\.ubuntu\.com/mirrors\.txt|' /etc/apt/sources.list"
+    end
 
-  config.vm.provision "build", type: "shell" do |s|
-    s.privileged = false
-    s.inline = $build
-  end
+    config.vm.provision "build", type: "shell" do |s|
+        s.privileged = false
+        s.inline = $build
+    end
 
-  config.vm.provision "test", type: "shell" do |s|
-    s.privileged = false
-    s.inline = "cd /vagrant && integration-scripts/test_codeface.sh"
-  end
+    config.vm.provision "test", type: "shell" do |s|
+        s.privileged = false
+        s.inline = "cd /vagrant && integration-scripts/test_codeface.sh"
+    end
 
+    config.vm.provision "check-vagrant-folder", type: "shell" do |s|
+        s.privileged = false
+        s.inline = <<-SHELL
+            echo "Contenuto di /vagrant:"
+            ls -la /vagrant || echo "⚠️  /vagrant NON montata!"
+        SHELL
+    end
+
+    config.vm.provision "shell", inline: <<-SHELL
+        echo "✅ Container avviato e accessibile via SSH!"
+    SHELL
 end
