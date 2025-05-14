@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
     python \
     python-dev \
     libmysqlclient-dev \
-    gcc-multilib g++-multilib 
+    gcc-multilib g++-multilib \
+    mysql-server
 
 # 1.1 Installa pip per python2
 RUN curl -fsSL https://bootstrap.pypa.io/pip/2.7/get-pip.py -o get-pip.py && \
@@ -44,6 +45,20 @@ RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
 WORKDIR /vagrant/id_service
 RUN npm install
 
+# 7. Run mysql server
+
+COPY ./datamodel/codeface_schema.sql /codeface_schema.sql
+COPY setup_mysql.sh /setup_mysql.sh
+COPY post_ssh.sh /post_ssh.sh
+
+RUN chmod +x /setup_mysql.sh && /setup_mysql.sh
+
+# 8. Preparo codeface dopo eseguito il login
+RUN chown vagrant:vagrant /post_ssh.sh && chmod +x //post_ssh.sh
+RUN echo "bash /post_ssh.sh" >> /home/vagrant/.bashrc
+
 EXPOSE 22
 
-CMD ["/usr/sbin/sshd", "-D"]
+# CMD ["/usr/sbin/sshd", "-D"]
+CMD bash -c "service mysql start && exec /usr/sbin/sshd -D"
+

@@ -66,7 +66,7 @@ var pool = mysql.createPool(db_config)
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
-  extended: true
+    extended: true
 }));
 
 /**
@@ -75,18 +75,18 @@ app.use(bodyParser.urlencoded({
  * and finally end the connection and return it to the pool
  */
 function withCheckedConnection(response, func) {
-    pool.getConnection(function(err, connection) {
+    pool.getConnection(function (err, connection) {
         if (err) {
             msg = 'MySQL connection error: ' + err;
             logger.log('error', msg);
-            response.end(JSON.stringify({"error":msg}));
+            response.end(JSON.stringify({ "error": msg }));
         } else {
             try {
                 func(connection);
             } catch (exception) {
                 msg = 'Exception: ' + exception.message
                 logger.log('error', msg);
-                response.end(JSON.stringify({"error":msg}));
+                response.end(JSON.stringify({ "error": msg }));
                 connection.destroy();
             }
         }
@@ -97,10 +97,10 @@ function withCheckedConnection(response, func) {
  * HTTP GET /users
  * Returns: the list of users in JSON format
  */
-app.get('/getUsers', function(request, response) {
+app.get('/getUsers', function (request, response) {
     logger.log('info', "/getUsers");
-    withCheckedConnection(response, function(connection) {
-        connection.query('SELECT * FROM person;', function(error, rows, fields) {
+    withCheckedConnection(response, function (connection) {
+        connection.query('SELECT * FROM person;', function (error, rows, fields) {
             response.end(JSON.stringify(rows));
         });
         connection.release();
@@ -112,14 +112,14 @@ app.get('/getUsers', function(request, response) {
  * Param: :id is the unique identifier of the user you want to retrieve
  * Returns: the user with the specified :id in a JSON format
  */
-app.get('/getUser/:id', function(request, response) {
+app.get('/getUser/:id', function (request, response) {
     logger.log('info', "/getUser/:id");
     var taskId = request.params.id;
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         connection.query('SELECT * FROM person WHERE id=?;', [taskId],
-			 function(error, rows, fields) {
-			     response.end(JSON.stringify(rows));
-			 });
+            function (error, rows, fields) {
+                response.end(JSON.stringify(rows));
+            });
         connection.release();
     });
 });
@@ -129,14 +129,14 @@ app.get('/getUser/:id', function(request, response) {
  * Param: :projectID (Integer) is the id of the project the timeseries belong to
  * Returns: the list of ReleaseTimelines belonging to the given project in JSON format
  */
-app.get('/getReleaseTimelines/:projectID', function(request, response) {
+app.get('/getReleaseTimelines/:projectID', function (request, response) {
     logger.log('info', '/getReleaseTimelines/:projectID');
     var projectID = request.params.projectID;
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         connection.query('SELECT * FROM release_timeline WHERE projectId=?;',
-			 [projectID], function(error, rows, fields) {
-            response.end(JSON.stringify(rows));
-        });
+            [projectID], function (error, rows, fields) {
+                response.end(JSON.stringify(rows));
+            });
         connection.release();
     });
 });
@@ -148,16 +148,16 @@ app.get('/getReleaseTimelines/:projectID', function(request, response) {
  * Param: :endTimestamp (timestanp) end of intervall
  * Returns: the list of ReleaseTimelines belonging to the given project in JSON format
  */
-app.get('/getReleaseTimelines/:projectID/:startTimestamp/:endTimestamp', function(request, response) {
+app.get('/getReleaseTimelines/:projectID/:startTimestamp/:endTimestamp', function (request, response) {
     logger.log('info', '/getReleaseTimelines/:projectID/:startTimestamp/:endTimestamp');
     var projectID = request.params.projectID;
     var begin = request.params.startTimestamp;
     var end = request.params.endTimestamp;
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         connection.query('SELECT * FROM release_timeline WHERE projectId=? AND date >=? AND date <= ?;',
-			 [projectID, begin, end], function(error, rows, fields) {
-			     response.end(JSON.stringify(rows));
-			 });
+            [projectID, begin, end], function (error, rows, fields) {
+                response.end(JSON.stringify(rows));
+            });
         connection.release();
     });
 });
@@ -169,13 +169,13 @@ app.get('/getReleaseTimelines/:projectID/:startTimestamp/:endTimestamp', functio
  * Param: :plotType (String) is the type of the plot
  * Returns: the list of ReleaseTimelines belonging to the given project in JSON format
  */
-app.get('/getPlotBinData/:projectID/:plotName/:plotType', function(request, response) {
+app.get('/getPlotBinData/:projectID/:plotName/:plotType', function (request, response) {
     logger.log('info', '/getPlotBinData/:projectID/:plotName/:plotType');
     var projectID = request.params.projectID;
     var plotName = request.params.plotName;
     var plotType = request.params.plotType;
-    withCheckedConnection(response, function(connection) {
-        connection.query('select plotId, type, data from plot_bin, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' and type = \'' + plotType + '\';', function(error, rows, fields) {
+    withCheckedConnection(response, function (connection) {
+        connection.query('select plotId, type, data from plot_bin, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' and type = \'' + plotType + '\';', function (error, rows, fields) {
             response.end(JSON.stringify(rows));
         });
         connection.release();
@@ -186,10 +186,10 @@ app.get('/getPlotBinData/:projectID/:plotName/:plotType', function(request, resp
  * HTTP GET /getProjects
  * Returns: the list of projects in JSON format containing id, name, analysisMethod, analysisTime
  */
-app.get('/getProjects', function(request, response) {
+app.get('/getProjects', function (request, response) {
     logger.log('info', '/getProjects');
-    withCheckedConnection(response, function(connection) {
-        connection.query('SELECT * FROM project;', function(error, rows, fields) {
+    withCheckedConnection(response, function (connection) {
+        connection.query('SELECT * FROM project;', function (error, rows, fields) {
             response.end(JSON.stringify(rows));
         });
         connection.release();
@@ -201,14 +201,14 @@ app.get('/getProjects', function(request, response) {
  * Param: :name (String) is the name of the projects to query for
  * Returns: the list of projects with that name in JSON format containing id, name, analysisMethod, analysisTime
  */
-app.get('/getProjectsByName/:name', function(request, response) {
+app.get('/getProjectsByName/:name', function (request, response) {
     logger.log('info', '/getProjectsByName/:name');
     var name = request.params.name;
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         connection.query('SELECT * FROM project WHERE name=?;', [name],
-			 function(error, rows, fields) {
-			     response.end(JSON.stringify(rows));
-			 });
+            function (error, rows, fields) {
+                response.end(JSON.stringify(rows));
+            });
         connection.release();
     });
 });
@@ -219,15 +219,15 @@ app.get('/getProjectsByName/:name', function(request, response) {
  * Param: :method (String) is the name of the analysis method used for the project analysis
  * Returns: the list of projects with that name in JSON format containing id, name, analysisMethod, analysisTime
  */
-app.get('/getProjectsByNameAndMethod/:name/:method', function(request, response) {
+app.get('/getProjectsByNameAndMethod/:name/:method', function (request, response) {
     logger.log('info', '/getProjectsByNameAndMethod/:name/:method');
     var name = request.params.name;
     var method = request.params.method;
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         connection.query('SELECT * FROM project WHERE name=? AND analysisMethod=?;',
-			 [name, method], function(error, rows, fields) {
-            response.end(JSON.stringify(rows));
-        });
+            [name, method], function (error, rows, fields) {
+                response.end(JSON.stringify(rows));
+            });
         connection.release();
     });
 });
@@ -238,12 +238,12 @@ app.get('/getProjectsByNameAndMethod/:name/:method', function(request, response)
  * Param: :plotName (String) is the identifiing name of the plot the timeseries belongs to
  * Returns: the list of data for that plot ordered ascending by time in JSON format containing plotid, time, value, value_scaled
  */
-app.get('/getTimeSeriesData/:projectID/:plotName', function(request, response) {
+app.get('/getTimeSeriesData/:projectID/:plotName', function (request, response) {
     logger.log('info', '/getTimeSeriesData/:projectID/:plotName');
     var projectID = request.params.projectID;
     var plotName = request.params.plotName;
-    withCheckedConnection(response, function(connection) {
-        connection.query('select plotId, time, value, value_scaled from timeseries, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' order by time asc;', function(error, rows, fields) {
+    withCheckedConnection(response, function (connection) {
+        connection.query('select plotId, time, value, value_scaled from timeseries, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' order by time asc;', function (error, rows, fields) {
             response.end(JSON.stringify(rows));
         });
         connection.release();
@@ -258,14 +258,14 @@ app.get('/getTimeSeriesData/:projectID/:plotName', function(request, response) {
  * Param: :endTimestamp (timestanp) end of intervall
  * Returns: the list of data existing in the given intervall for that plot ordered ascending by time in JSON format containing plotid, time, value, value_scaled
  */
-app.get('/getTimeSeriesDataForInterval/:projectID/:plotName/:startTimestamp/:endTimestamp', function(request, response) {
+app.get('/getTimeSeriesDataForInterval/:projectID/:plotName/:startTimestamp/:endTimestamp', function (request, response) {
     logger.log('info', '/getTimeSeriesDataForInterval/:projectID/:plotName/:startTimestamp/:endTimestamp');
     var projectID = request.params.projectID;
     var plotName = request.params.plotName;
     var begin = request.params.startTimestamp;
     var end = request.params.endTimestamp;
-    withCheckedConnection(response, function(connection) {
-        connection.query('select plotId, time, value, value_scaled from timeseries, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' and time >= \'' + begin + '\'  and time <= \'' + end + '\' order by time asc;', function(error, rows, fields) {
+    withCheckedConnection(response, function (connection) {
+        connection.query('select plotId, time, value, value_scaled from timeseries, plots where plotId = id and projectId = ' + projectID + ' and name = \'' + plotName + '\' and time >= \'' + begin + '\'  and time <= \'' + end + '\' order by time asc;', function (error, rows, fields) {
             response.end(JSON.stringify(rows));
         });
         connection.release();
@@ -278,7 +278,7 @@ app.get('/getTimeSeriesDataForInterval/:projectID/:plotName/:startTimestamp/:end
 function lockTablePerson(connection) {
     logger.log('trace', 'lockTablePerson');
     // Lock table Person
-    connection.query('LOCK TABLE person WRITE;', function(error, ret, fields) {
+    connection.query('LOCK TABLE person WRITE;', function (error, ret, fields) {
         if (error) {
             logger.log('error', 'Lock returned error: ' + error);
         }
@@ -292,7 +292,7 @@ function lockTablePerson(connection) {
 function unlockTablePerson(connection) {
     logger.log('trace', 'unlockTablePerson');
     // Lock table Person
-    connection.query('UNLOCK TABLES;', function(error, ret, fields) {
+    connection.query('UNLOCK TABLES;', function (error, ret, fields) {
         if (error) {
             logger.log('error', 'Unlock returned error: ' + error);
         }
@@ -310,26 +310,26 @@ function unlockTablePerson(connection) {
 function checkedWithID(name, email, projectID, response, connection, callback) {
     if (name && email) {
         // First, try to get an existing database that matches both name and email
-	q = 'SELECT id FROM person WHERE projectId=? AND name=? AND ? IN (email1, email2, email3, email4, email5);'
-	params = [projectID, name, email];
+        q = 'SELECT id FROM person WHERE projectId=? AND name=? AND ? IN (email1, email2, email3, email4, email5);'
+        params = [projectID, name, email];
     } else if (email) {
         // First, try to get an existing database that matches email
         // Technically, this can match more than one person if the email and
         // the name have been inserted separately, so specify LIMIT 1
         q = 'SELECT id FROM person WHERE projectId=? AND ? IN (email1, email2, ' +
-	    'email3, email4, email5) ORDER BY id LIMIT 1;'
-	params = [projectID, email];
+            'email3, email4, email5) ORDER BY id LIMIT 1;'
+        params = [projectID, email];
     } else { // name is set
         // First, try to get an existing database that matches the same name
         q = 'SELECT id FROM person WHERE projectId=? AND name=? ORDER BY id LIMIT 1;'
-	params = [projectID, name];
+        params = [projectID, name];
     }
     logger.log('trace', q + params)
-    connection.query(q, params, function(error, rows, fields) {
+    connection.query(q, params, function (error, rows, fields) {
         if (error) {
             msg = 'MySQL error: ' + error;
             logger.log('error', msg);
-            response.end(JSON.stringify({"error": msg}));
+            response.end(JSON.stringify({ "error": msg }));
             connection.destroy();
         } else {
             try {
@@ -337,7 +337,7 @@ function checkedWithID(name, email, projectID, response, connection, callback) {
             } catch (exception) {
                 msg = 'Exception: ' + exception.message;
                 logger.log('error', msg);
-                response.end(JSON.stringify({"error": msg}));
+                response.end(JSON.stringify({ "error": msg }));
                 connection.destroy();
             }
         }
@@ -352,35 +352,35 @@ function checkedWithID(name, email, projectID, response, connection, callback) {
  * return if a matching entry is found. If the database needs to be updated,
  * the app.getOrUpdateUserInDB function is called from here
  */
-app.getUserFromDB = function(name, email, projectID, response) {
-    withCheckedConnection(response, function(connection) {
+app.getUserFromDB = function (name, email, projectID, response) {
+    withCheckedConnection(response, function (connection) {
         // Return an error if ProjectId or name and email have been empty
         if (!projectID) {
             msg = 'input error: projectID missing';
             logger.log('error', msg);
-            response.end(JSON.stringify({"error": msg}));
+            response.end(JSON.stringify({ "error": msg }));
             connection.release()
         } else if ((!name) && (!email)) {
             msg = 'input error: name and email missing';
             logger.log('error', msg);
-            response.end(JSON.stringify({"error": msg}));
+            response.end(JSON.stringify({ "error": msg }));
             connection.release()
         } else {
-            checkedWithID(name, email, projectID, response, connection, function(rows) {
+            checkedWithID(name, email, projectID, response, connection, function (rows) {
                 if (rows.length == 1) {
                     // Regular response
-                    var id = { id : rows[0].id };
+                    var id = { id: rows[0].id };
                     response.end(JSON.stringify(id));
                 } else if (rows.length == 0) {
                     if (!email) {
                         logger.log('error', 'name ' + name + ' (no email ' + email + ') not found in database!');
-                        response.end(JSON.stringify({"error": "name \"" + name + "\" not found in the database (no e-mail given)"}));
+                        response.end(JSON.stringify({ "error": "name \"" + name + "\" not found in the database (no e-mail given)" }));
                     } else {
                         app.getOrUpdateUserInDB(name, email, projectID, response)
                     }
                 } else {
                     logger.log('error', 'database error: duplicate entries!');
-                    response.end(JSON.stringify({"error": "duplicate entries"}));
+                    response.end(JSON.stringify({ "error": "duplicate entries" }));
                 }
                 connection.release()
             });
@@ -392,20 +392,20 @@ app.getUserFromDB = function(name, email, projectID, response) {
  * Get, add or update a user in the DB given the name and email
  * This function uses MySQL table locks to synchronise.
  */
-app.getOrUpdateUserInDB = function(name, email, projectID, response) {
+app.getOrUpdateUserInDB = function (name, email, projectID, response) {
     // Assertion: email must be set at this point
     logger.log('info', 'inserting/updating user ' + name + ' <' + email + '>');
-    withCheckedConnection(response, function(connection) {
+    withCheckedConnection(response, function (connection) {
         try {
             lockTablePerson(connection)
             // From this point until unlockTablePerson(), all queued MySQL
             // requests on this connection operate under the table lock
             // Note that we first have to check again if we missed an update
             // before we got the lock.
-            checkedWithID(name, email, projectID, response, connection, function(rows) {
+            checkedWithID(name, email, projectID, response, connection, function (rows) {
                 if (rows.length == 1) {
                     // Someone else did the insert for us. Just return.
-                    var id = { id : rows[0].id };
+                    var id = { id: rows[0].id };
                     response.end(JSON.stringify(id));
 
                     unlockTablePerson(connection)
@@ -414,12 +414,12 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
                     // Now we have to insert or update the database
 
                     // This function will terminate the connection, and log any MySQL error
-                    fail_on_error = function(error, info) {
+                    fail_on_error = function (error, info) {
                         if (error) {
                             logger.log('trace', info)
                             msg = 'MySQL Error: ' + error
                             logger.log('error', msg)
-                            response.end(JSON.stringify({"error": msg}));
+                            response.end(JSON.stringify({ "error": msg }));
                         }
                         unlockTablePerson(connection)
                         connection.release()
@@ -427,7 +427,7 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
 
                     if (name && email) {
                         // First, try to find a set by name
-                        checkedWithID(name, null, projectID, response, connection, function(rows) {
+                        checkedWithID(name, null, projectID, response, connection, function (rows) {
                             if (rows.length >= 1) {
                                 // Add this email to the end of the email list if it is not yet in the list
                                 q = 'UPDATE person SET email5=CASE WHEN email5 IS NULL AND email4 IS NOT NULL THEN ? ELSE email5 END, ' +
@@ -437,39 +437,39 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
                                     ' WHERE id=? LIMIT 1;'
                                 logger.log('trace', q + [email, rows[0].id])
                                 connection.query(q, [email, email, email,
-						     email, rows[0].id],
-						 fail_on_error)
-                                var id = { id : rows[0].id };
+                                    email, rows[0].id],
+                                    fail_on_error)
+                                var id = { id: rows[0].id };
                                 response.end(JSON.stringify(id));
                             } else {
                                 // Now find a set by email
-                                checkedWithID(null, email, projectID, response, connection, function(rows) {
+                                checkedWithID(null, email, projectID, response, connection, function (rows) {
                                     if (rows.length >= 1) {
                                         // Update the name of this entry
                                         q = 'UPDATE person SET name=? WHERE id=? LIMIT 1;'
                                         logger.log('trace', q + [name, rows[0].id])
                                         connection.query(q, [name, rows[0].id],
-							 fail_on_error)
-                                        var id = { id : rows[0].id };
+                                            fail_on_error)
+                                        var id = { id: rows[0].id };
                                         response.end(JSON.stringify(id));
                                     } else {
                                         // Now we have to insert a new user
                                         q = 'INSERT INTO person (projectId, name, email1) VALUES (?, ?, ?);'
                                         logger.log('trace', q +
-						   [projectID, name, email])
+                                            [projectID, name, email])
                                         connection.query(q, [projectID, name, email],
-							 function(error, info) {
-                                            unlockTablePerson(connection)
-                                            connection.release()
-                                            if (error) {
-                                                msg = 'MySQL error: ' + error;
-                                                logger.log('error', msg);
-                                                response.end(JSON.stringify({"error": msg}));
-                                            } else {
-                                                var id = { id : info.insertId };
-                                                response.end(JSON.stringify(id));
-                                            }
-                                        });
+                                            function (error, info) {
+                                                unlockTablePerson(connection)
+                                                connection.release()
+                                                if (error) {
+                                                    msg = 'MySQL error: ' + error;
+                                                    logger.log('error', msg);
+                                                    response.end(JSON.stringify({ "error": msg }));
+                                                } else {
+                                                    var id = { id: info.insertId };
+                                                    response.end(JSON.stringify(id));
+                                                }
+                                            });
                                     }
                                 });
                             }
@@ -477,22 +477,22 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
                     } else { // only email is set
                         q = 'INSERT INTO person (projectId, email1) VALUES (?, ?);'
                         connection.query(q, [projectID, email],
-					 function(error, info) {
-                            unlockTablePerson(connection)
-                            connection.release()
-                            if (error) {
-                                msg = 'MySQL error: ' + error;
-                                logger.log('error', msg);
-                                response.end(JSON.stringify({"error": msg}));
-                            } else {
-                                var id = { id : info.insertId };
-                                response.end(JSON.stringify(id));
-                            }
-                        });
+                            function (error, info) {
+                                unlockTablePerson(connection)
+                                connection.release()
+                                if (error) {
+                                    msg = 'MySQL error: ' + error;
+                                    logger.log('error', msg);
+                                    response.end(JSON.stringify({ "error": msg }));
+                                } else {
+                                    var id = { id: info.insertId };
+                                    response.end(JSON.stringify(id));
+                                }
+                            });
                     }
                 } else {
                     logger.log('error', 'database error: duplicate entries!');
-                    response.end(JSON.stringify({"error": "duplicate entries"}));
+                    response.end(JSON.stringify({ "error": "duplicate entries" }));
                     unlockTablePerson(connection)
                     connection.release()
                 }
@@ -500,7 +500,7 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
         } catch (exception) {
             msg = 'Exception: ' + exception.message
             logger.log('error', msg)
-            response.end(JSON.stringify({"error": msg}));
+            response.end(JSON.stringify({ "error": msg }));
         }
     });
 }
@@ -508,7 +508,7 @@ app.getOrUpdateUserInDB = function(name, email, projectID, response) {
 /**
  * GET USER ID
  */
-app.getUserID = function(request, response) {
+app.getUserID = function (request, response) {
     var name = request.params.name;
     var email = request.params.email;
     var projectID = request.params.projectID;
@@ -519,10 +519,10 @@ app.getUserID = function(request, response) {
 /**
  * POST USER ID
  */
-app.postUserID = function(request, response) {
+app.postUserID = function (request, response) {
     logger.log('trace', 'POST User ID request: name="' + request.body.name +
-	       '", email="' + request.body.email + '", projectId=' +
-	      request.body.projectID);
+        '", email="' + request.body.email + '", projectId=' +
+        request.body.projectID);
     var name = request.body.name;
     var email = request.body.email;
     var projectID = request.body.projectID;
@@ -535,7 +535,7 @@ app.postUserID = function(request, response) {
  * In contrast to postUserID, the name/email combination can be passed
  * in one string and need not come decomposed into name and email parts.
  */
-app.postDecomposeUserID = function(request, response) {
+app.postDecomposeUserID = function (request, response) {
     logger.log('info', request.body);
     var namestr = request.body.namestr;
     var projectID = request.body.projectID;
@@ -572,7 +572,7 @@ app.post('/post_user_id', app.postUserID);
  * Param: :projectID ist the id of the project the user belongs to
  * Param: :namestr is the combined name/email string
  * JSON to POST, example with curl:
- * curl -v -X POST -d "projectID=1&namestr="Zhang Rui <rui.zhang@intel.com>" http://localhost:8080/post_user_id
+ * curl -v -X POST -d "projectID=1&namestr="Zhang Rui <rui.zhang@intel.com>" http://localhost:3000/post_user_id
  * Returns: the unique identifier (id) of the user with the given name and
  * email in JSON format. If the user did not exist by now it is created
  * (insertId). If no id is found and no new id can be generated an error is
@@ -581,8 +581,8 @@ app.post('/post_user_id', app.postUserID);
 app.post('/post_decompose_user_id', app.postDecomposeUserID);
 
 /**
- * Start listening on port 8080
+ * Start listening on port 3000
  */
 logger.log('info', 'Starting to listen on ' + config.idServiceHostname + ':' +
-	   config.idServicePort)
+    config.idServicePort)
 app.listen(config.idServicePort, config.idServiceHostname); //to port & hostname on which the express server listen
