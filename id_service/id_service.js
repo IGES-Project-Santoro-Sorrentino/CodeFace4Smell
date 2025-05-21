@@ -572,7 +572,7 @@ app.post('/post_user_id', app.postUserID);
  * Param: :projectID ist the id of the project the user belongs to
  * Param: :namestr is the combined name/email string
  * JSON to POST, example with curl:
- * curl -v -X POST -d "projectID=1&namestr="Zhang Rui <rui.zhang@intel.com>" http://localhost:3000/post_user_id
+ * curl -v -X POST -d "projectID=1&namestr="Zhang Rui <rui.zhang@intel.com>" http://localhost:8080/post_user_id
  * Returns: the unique identifier (id) of the user with the given name and
  * email in JSON format. If the user did not exist by now it is created
  * (insertId). If no id is found and no new id can be generated an error is
