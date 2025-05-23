@@ -1,0 +1,12 @@
+services:
+  codeface:
+    build: .
+    container_name: codeface4smell
+    ports:
+      - "2222:22"
+      - "8081:8081"
+      - "8100:8100"
+    volumes:
+      - .:/codeface
+    environment:
+      - DEBIAN_FRONTEND=noninteractive

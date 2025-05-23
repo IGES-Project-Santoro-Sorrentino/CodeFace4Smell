@@ -1,57 +1,61 @@
-filter.installed.packages <- function(packageList)  {
-    if("-f" %in% commandArgs(trailingOnly = TRUE)) {
+# --- Utility functions ---
+filter.installed.packages <- function(packageList) {
+    if ("-f" %in% commandArgs(trailingOnly = TRUE)) {
         return(packageList)
     } else {
-        return(packageList[which(packageList %in% installed.packages()[,1] == FALSE)])
+        return(packageList[!(packageList %in% installed.packages()[,1])])
     }
 }
 
-## Remove package from all libraries (i.e., .libPaths())
 remove.installed.packages <- function(pack) {
     for (path in .libPaths()) {
-        # try to remove package (hard stop() otherwise, if not existing)
         tryCatch({
             remove.packages(pack, path)
-            print(paste("removed previously installed package", pack))
-        }, error = function(e) {
-            # silently ignore errors (the reason would be that a package
-            # is not installed)
-        })
+            cat(sprintf("✔ Removed previously installed package: %s\n", pack))
+        }, error = function(e) {})
     }
 }
 
-## (re-)install a package from github
 reinstall.package.from.github <- function(package, url) {
-
-    ## if package is installed, remove it completely from all libraries
     p <- filter.installed.packages(c(package))
-    if(length(p) == 0) {
+    if (length(p) == 0) {
         remove.installed.packages(package)
     }
 
-    ## Re-install packages
+    if (!requireNamespace("devtools", quietly = TRUE)) {
+        install.packages("devtools", repos = "https://cloud.r-project.org")
+    }
+
     devtools::install_github(url)
 }
 
-p <- filter.installed.packages(c("BiRewire", "graph", "Rgraphviz"))
-if(length(p) > 0) {
-    source("http://bioconductor.org/biocLite.R")
-    biocLite(p)
+# --- Install CRAN packages ---
+cran_packages <- c(
+    "statnet", "ggplot2", "tm", "optparse", "igraph", "zoo", "xts",
+    "lubridate", "xtable", "reshape", "wordnet", "stringr", "yaml", "plyr",
+    "scales", "gridExtra", "RMySQL", "RCurl", "mgcv", "shiny", "dtw", "httpuv",
+    "corrgram", "logging", "png", "rjson", "lsa", "RJSONIO", "devtools"
+)
+
+to_install <- filter.installed.packages(cran_packages)
+
+if (length(to_install) > 0) {
+    install.packages(to_install, repos = "https://cloud.r-project.org", dependencies = TRUE)
 }
 
-p <- filter.installed.packages(c("statnet", "ggplot2", "tm", "optparse",
-                                 "igraph", "zoo", "xts", "lubridate", "xtable",
-                                 "reshape", "wordnet", "stringr", "yaml", "plyr",
-                                 "scales", "gridExtra", "scales", "RMySQL",
-                                 "RCurl", "mgcv", "shiny", "dtw", "httpuv", "devtools",
-                                 "corrgram", "logging", "png", "rjson", "lsa", "RJSONIO"))
-if(length(p) > 0) {
-    install.packages(p ,dependencies=T)
+# --- Install Bioconductor packages ---
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager", repos = "https://cloud.r-project.org")
 }
 
+bioc_packages <- c("BiRewire", "graph", "Rgraphviz")
+to_bioc <- filter.installed.packages(bioc_packages)
 
-## Install following packages from different sources
-## and update existing installations, if needed
+if (length(to_bioc) > 0) {
+    BiocManager::install(to_bioc, ask = FALSE, update = FALSE)
+}
+
+# --- GitHub packages ---
 reinstall.package.from.github("tm.plugin.mail", "wolfgangmauerer/tm-plugin-mail/pkg")
 reinstall.package.from.github("snatm", "wolfgangmauerer/snatm/pkg")
 reinstall.package.from.github("shinyGridster", "wch/shiny-gridster")

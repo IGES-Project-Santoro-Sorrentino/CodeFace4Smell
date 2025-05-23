@@ -2,14 +2,14 @@
 
 echo "Providing R libraries"
 
-sudo DEBIAN_FRONTEND=noninteractive apt-get -qqy install r-base r-base-dev r-cran-ggplot2 r-cran-tm \
-	r-cran-tm.plugin.mail r-cran-optparse r-cran-igraph r-cran-zoo r-cran-xts \
-	r-cran-lubridate r-cran-xtable r-cran-reshape r-cran-wordnet \
-	r-cran-stringr r-cran-yaml r-cran-plyr r-cran-scales r-cran-gridExtra \
-	r-cran-scales r-cran-RMySQL r-cran-RJSONIO r-cran-RCurl r-cran-mgcv \
-	r-cran-shiny r-cran-dtw r-cran-httpuv r-cran-png \
-	r-cran-rjson r-cran-lsa r-cran-testthat r-cran-arules r-cran-data.table \
-	r-cran-ineq libx11-dev libssh2-1-dev r-bioc-biocinstaller
 
-sudo Rscript packages.R
+apt-get update && apt-get install -y --no-install-recommends \
+    r-base r-base-dev \
+    libcurl4-openssl-dev libssl-dev libxml2-dev \
+    libx11-dev libssh2-1-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+echo "Installing R libraries from CRAN"
+
+Rscript packages.R
 
