@@ -1,7 +1,7 @@
 #!/bin/sh
 
 apt-get update -qq
-apt-get install -y --no-install-recommends software-properties-common
+# apt-get install -y --no-install-recommends software-properties-common
 
 echo "Adding R cran repositories"
 sudo add-apt-repository -y ppa:marutter/rrutter

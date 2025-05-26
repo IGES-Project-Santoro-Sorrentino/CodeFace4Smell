@@ -1,3 +1,6 @@
+# --- Install required packages ---
+# install.packages(c("R6", "rlang", "curl", "fs", "glue", "xml2"), repos = "https://cloud.r-project.org", dependencies = TRUE)
+
 # --- Utility functions ---
 filter.installed.packages <- function(packageList) {
     if ("-f" %in% commandArgs(trailingOnly = TRUE)) {
