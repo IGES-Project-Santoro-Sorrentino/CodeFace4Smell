@@ -1,5 +1,4 @@
 # --- Install required packages ---
-# install.packages(c("R6", "rlang", "curl", "fs", "glue", "xml2"), repos = "https://cloud.r-project.org", dependencies = TRUE)
 
 # --- Utility functions ---
 filter.installed.packages <- function(packageList) {
@@ -31,6 +30,13 @@ reinstall.package.from.github <- function(package, url) {
 
     devtools::install_github(url)
 }
+
+# p <- filter.installed.packages(c("statnet", "ggplot2", "tm", "optparse",
+#                                 "igraph", "zoo", "xts", "lubridate", "xtable",
+#                                 "reshape", "wordnet", "stringr", "yaml", "plyr",
+#                                 "scales", "gridExtra", "scales", "RMySQL",
+#                                 "RCurl", "mgcv", "shiny", "dtw", "httpuv", "devtools",
+#                                 "corrgram", "logging", "png", "rjson", "lsa", "RJSONIO"))
 
 # --- Install CRAN packages ---
 cran_packages <- c(

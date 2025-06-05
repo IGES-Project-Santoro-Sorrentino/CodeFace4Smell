@@ -2,7 +2,7 @@ FROM --platform=linux/amd64 ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update
+RUN apt-get update 
 
 RUN apt-get install -y --no-install-recommends \
     openssh-server \
@@ -14,9 +14,8 @@ RUN apt-get install -y --no-install-recommends \
     && apt-get clean
 
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-
-RUN apt-get update 
-RUN apt install -y g++-10
+RUN apt-get update --fix-missing
+RUN apt install -y --no-install-recommends g++-10
 
 # Create user (like Vagrant)
 RUN useradd -m -s /bin/bash vagrant && \
@@ -25,7 +24,7 @@ RUN useradd -m -s /bin/bash vagrant && \
     echo "vagrant ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vagrant && \
     chmod 0440 /etc/sudoers.d/vagrant
 
-# Set up SSH
+# # Set up SSH
 RUN mkdir /var/run/sshd && \
     mkdir -p /home/vagrant/.ssh && \
     curl -fsSL https://raw.githubusercontent.com/hashicorp/vagrant/main/keys/vagrant.pub -o /home/vagrant/.ssh/authorized_keys && \
@@ -37,24 +36,27 @@ WORKDIR /codeface
 
 # # The integration scripts are copied before the rest of the codebase to take advantage of Docker's caching mechanism
 COPY integration-scripts/ integration-scripts/
-COPY packages.R /codeface/packages.R
+COPY rpackages/ rpackages/
 
 RUN chmod +x integration-scripts/*.sh
+RUN chmod +x rpackages/*.R
 
-# Installing crucial dependencies
-RUN bash integration-scripts/install_codeface_R.sh
-RUN Rscript -e "install.packages(c('R6', 'rlang', 'curl', 'fs', 'glue', 'xml2'), repos='https://cloud.r-project.org', dependencies=TRUE)"
-
-# Now run the package.R file
-RUN Rscript packages.R
-
-# Install additional dependencies
+# # Install additional dependencies
 RUN bash integration-scripts/install_repositories.sh
 RUN bash integration-scripts/install_common.sh
-RUN bash integration-scripts/install_codeface_node.sh
-RUN bash integration-scripts/install_codeface_python.sh
-RUN bash integration-scripts/install_cppstats.sh
-RUN bash integration-scripts/setup_database.sh
+RUN bash integration-scripts/install_codeface_R.sh
+
+# # Install R files
+RUN Rscript rpackages/install_base_packages.R
+RUN Rscript rpackages/install_cran_packages.R
+RUN Rscript rpackages/install_bioc_packages.R
+RUN Rscript rpackages/devtools.R
+RUN Rscript rpackages/install_github_packages.R
+
+# RUN bash integration-scripts/install_codeface_node.sh
+# RUN bash integration-scripts/install_codeface_python.sh
+# RUN bash integration-scripts/install_cppstats.sh
+# RUN bash integration-scripts/setup_database.sh
 
 COPY . .
 
