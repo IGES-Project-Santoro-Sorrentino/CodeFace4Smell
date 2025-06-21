@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "id_service"
+cd "../id_service"
 node id_service.js ../codeface.conf &
 node_job=$!
 cd ..

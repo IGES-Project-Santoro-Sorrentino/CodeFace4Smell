@@ -24,8 +24,8 @@ import shelve
 import pickle
 import os.path
 import argparse
-import codeBlock
-import codeLine
+from . import codeBlock
+from . import codeLine
 import math
 import random
 import itertools
@@ -38,8 +38,8 @@ from codeface.commit_analysis import (getSignoffCount, getSignoffEtcCount,
 from codeface.cluster.PersonInfo import RelationWeight
 from codeface.VCS import gitVCS
 from codeface.dbmanager import DBManager, tstamp_to_sql
-from .PersonInfo import PersonInfo
-from .idManager import idManager
+from . import PersonInfo
+from . import idManager
 from codeface.linktype import LinkType
 
 #Global Constants
@@ -51,7 +51,7 @@ def createDB(filename, git_repo, revrange, subsys_descr, link_type,
     #------------------
     #configuration
     #------------------
-    git = gitVCS();
+    git = gitVCS()
     git.setRepository(git_repo)
     git.setRevisionRange(revrange[0], revrange[1])
     git.setSubsysDescription(subsys_descr)
@@ -95,7 +95,7 @@ def computeSubsysAuthorSimilarity(cmt_subsys, author):
     asf = author.getSubsysFraction()
 
     sim = 0
-    for (subsys_name, subsys_touched) in cmt_subsys.iteritems():
+    for (subsys_name, subsys_touched) in cmt_subsys.items():
         sim = max(sim, asf[subsys_name]*subsys_touched)
 
     if  sim > 1:
@@ -117,7 +117,7 @@ def computeAuthorAuthorSimilarity(auth1, auth2):
     count = 0
     sim = 0
 
-    for (subsys_name, fraction) in frac1.iteritems():
+    for (subsys_name, fraction) in frac1.items():
         if fraction != 0 and frac2[subsys_name] != 0:
             count += 1
             sim += fraction + frac2[subsys_name] # UB: 2
@@ -1047,7 +1047,7 @@ def createStatisticalData(cmtlist, id_mgr, link_type):
 
     # Now that all information on tags is available, compute the normalised
     # statistics. While at it, also compute the per-author commit summaries.
-    for (key, person) in id_mgr.getPersons().iteritems():
+    for (key, person) in id_mgr.getPersons().items():
             person.computeCommitStats()
             person.computeStats(link_type)
 
@@ -1437,7 +1437,7 @@ def computeLogicalDepends(fileCommit_list, cmt_dict, start_date):
       # Compute the number of lines of code changed for each dependency.
       # We captured the function dependency on a line by line basis above
       # now we aggregate the lines that change one function
-      for cmt_id, depend_list in func_depends.iteritems():
+      for cmt_id, depend_list in func_depends.items():
           for func_id, group in itertools.groupby(sorted(depend_list)):
               func_depends_count[cmt_id].extend([(func_id, len(list(group)))])
 
@@ -1505,13 +1505,13 @@ def compute_logical_depends_features(file_commit_list, cmt_dict, start_date):
         # Compute the number of lines of code changed for each dependency.
         # We captured the function dependency on a line by line basis above
         # now we aggregate the lines that change one function
-        for cmt_id, depend_list in feature_depends.iteritems():
+        for cmt_id, depend_list in feature_depends.items():
             feature_depends_count[cmt_id].extend(
                 [(feature_id, len(list(group)))
                     for feature_id, group in itertools.groupby(sorted(depend_list))])
 
         # Same for feature expressions
-        for cmt_id, depend_list in fexpr_depends.iteritems():
+        for cmt_id, depend_list in fexpr_depends.items():
             fexpr_depends_count[cmt_id].extend(
                  [(feature_id, len(list(group)))
                     for feature_id, group in itertools.groupby(sorted(depend_list))]
@@ -1800,7 +1800,7 @@ def computeSimilarity(cmtlist):
         atsim = 0 # Author-tagger similarity
         tssim = 0 # Tagger-subsys similarity
 
-        for (key, pi_list) in cmt.getTagPIs().iteritems():
+        for (key, pi_list) in cmt.getTagPIs().items():
             for pi in pi_list:
                 count += 1
                 atsim += computeAuthorAuthorSimilarity(author_pi, pi)
@@ -1961,7 +1961,7 @@ for person in persons.keys()[1:10]:
     tag_stats = persons[person].getTagStats()
     print("Name: {0}".format(persons[person].getName()))
     stats_str = ""
-    for (tag, count) in tag_stats.iteritems():
+    for (tag, count) in tag_stats.items():
         stats_str += "({0}, {1}) ".format(tag, count)
     print("   {0}".format(stats_str))
 
@@ -1985,7 +1985,7 @@ print("ID\tcdate\tAddedLines\tSignoffs\tCmtMsgSize\tChangedFiles\t")
 for ID, pi  in persons.items()[1:10]:
     print("ID: {0}, name: {1}".format(pi.getID(), pi.getName()))
     print("  Signed-off-by:")
-    for relID, count in pi.getPerformTagRelations("Signed-off-by").iteritems():
+    for relID, count in pi.getPerformTagRelations("Signed-off-by").items():
         print("    person: {0}, count: {1}".format(persons[relID].getName(),
                                                     count))
 '''

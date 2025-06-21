@@ -27,6 +27,10 @@ setup(name='codeface',
       packages=find_packages(exclude=['experiments']),
       package_data={'codeface': ['R/*.r', 'R/cluster/*.r', 'perl/*.pl']},
       entry_points={'console_scripts': ['codeface = codeface.cli:main']},
-      install_requires=['progressbar', 'VCS',
-                'python_ctags','PyYAML', 'MySQL_python']
+      install_requires=['progressbar', 
+                        'pygments', 
+                        #'VCS',
+                        'importlib_metadata',
+                        'mysqlclient',
+                        'python-ctags3','PyYAML == 5.4.1', 'PyMySQL == 1.0.2']
       )

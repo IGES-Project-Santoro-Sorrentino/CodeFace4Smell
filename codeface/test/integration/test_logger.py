@@ -19,7 +19,7 @@ import sys
 from os import unlink
 from logging import getLogger, INFO, DEBUG
 from tempfile import NamedTemporaryFile
-from StringIO import StringIO
+from io import StringIO
 
 from codeface.logger import (set_log_level, start_logfile, stop_logfile,
         console_handler)

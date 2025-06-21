@@ -37,16 +37,15 @@
 import itertools
 import readline
 
-import commit
-import fileCommit
+from . import commit
+from . import fileCommit
 import re
 import os
 import bisect
-import ctags
 import tempfile
-import sourceAnalysis
+from . import sourceAnalysis
 import shutil
-from fileCommit import FileDict
+from codeface.fileCommit import FileDict
 from progressbar import ProgressBar, Percentage, Bar, ETA
 from ctags import CTags, TagEntry
 from logging import getLogger
@@ -1311,7 +1310,7 @@ class gitVCS (VCS):
 
         try:
             file_analysis.run_analysis()
-        except Exception, e:
+        except Exception as e:
             log.critical("doxygen analysis error{0} - defaulting to Ctags".format(e))
             return {}, []
 

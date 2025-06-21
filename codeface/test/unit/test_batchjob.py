@@ -15,7 +15,6 @@
 # All Rights Reserved.
 
 import unittest
-import exceptions
 from logging import getLogger; log = getLogger("codeface.test.unit.batchjob")
 from time import sleep
 from random import random
