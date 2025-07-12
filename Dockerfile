@@ -2,9 +2,8 @@ FROM --platform=linux/amd64 ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update 
-
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     openssh-server \
     sudo \
     curl \
@@ -12,11 +11,11 @@ RUN apt-get install -y --no-install-recommends \
     ca-certificates \
     nano \
     software-properties-common \
-    && apt-get clean
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-RUN apt-get update --fix-missing
-RUN apt install -y --no-install-recommends g++-10
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test \
+    && apt-get update --fix-missing \
+    && apt install -y --no-install-recommends g++-10
 
 # Create user (like codeface)
 RUN useradd -m -s /bin/bash codeface && \
@@ -37,35 +36,36 @@ WORKDIR /codeface
 
 # # The integration scripts are copied before the rest of the codebase to take advantage of Docker's caching mechanism
 COPY integration-scripts/ integration-scripts/
-COPY rpackages/ rpackages/
-COPY setup.py setup.py
-
 RUN chmod +x integration-scripts/*.sh
-RUN chmod +x rpackages/*.R
 
 # # Install additional dependencies
 RUN bash integration-scripts/install_repositories.sh
 RUN bash integration-scripts/install_common.sh
 RUN bash integration-scripts/install_codeface_R.sh
 
-# # Install R files
-RUN Rscript rpackages/install_base_packages.R
-RUN Rscript rpackages/install_cran_packages.R
-RUN Rscript rpackages/install_bioc_packages.R
-RUN Rscript rpackages/install_github_packages.R
-
 RUN bash integration-scripts/install_codeface_node.sh
 RUN bash integration-scripts/install_codeface_python.sh
 RUN bash integration-scripts/install_cppstats.sh
 RUN bash integration-scripts/setup_mysql.sh
 
+COPY rpackages/ rpackages/
+RUN chmod +x rpackages/*.R 
+
+RUN bash rpackages/install_base_packages.sh
+RUN Rscript rpackages/install_base_packages.R
+
+RUN Rscript rpackages/install_cran_packages.R
+RUN Rscript rpackages/install_bioc_packages.R
+# RUN Rscript rpackages/install_github_packages.R
+
+COPY setup.py setup.py
+
 COPY . .
 
 # Preparo codeface dopo eseguito il login
-#RUN chmod +x start_server.sh
-#RUN echo "bash start_server.sh" >> /home/.bashrc
+# RUN chmod +x start_server.sh && echo "bash start_server.sh" >> /home/.bashrc
 
 # Expose ports
 EXPOSE 22 8081 8100
-
+RUN service mysql start
 CMD ["/usr/sbin/sshd", "-D"]

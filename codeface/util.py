@@ -41,10 +41,15 @@ from datetime import timedelta, datetime
 BatchJobTuple = namedtuple('BatchJobTuple', ['id', 'func', 'args', 'kwargs',
         'deps', 'startmsg', 'endmsg'])
 class BatchJob(BatchJobTuple):
-    def __init__(self, *args, **kwargs):
+    '''def __init__(self, *args, **kwargs):
         super(BatchJob, self).__init__(*args, **kwargs)
         self.done = False
-        self.submitted = False
+        self.submitted = False'''
+    def __new__(cls, *args, **kwargs):
+        instance = super(BatchJob, cls).__new__(cls, *args, **kwargs)
+        instance.done = False
+        instance.submitted = False
+        return instance
 
 class BatchJobPool(object):
     '''
@@ -112,7 +117,7 @@ class BatchJobPool(object):
             return None
         job_id = self.next_id
         self.next_id += 1
-        j = BatchJob(job_id, func, args, kwargs, deps, startmsg, endmsg)
+        j = BatchJob(id=job_id, func=func, args=args, kwargs=kwargs, startmsg=startmsg, endmsg=endmsg)
         self.jobs[job_id] = j
         return job_id
 

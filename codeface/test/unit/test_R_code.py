@@ -29,6 +29,7 @@ class TestRCode(unittest.TestCase):
 
     def testTest_R_dir(self):
         path = resource_filename("codeface", "R")
-        Rcode = 'library(testthat); if (all(data.frame(test_dir("."))[, "failed"])) stop("Some tests failed.")'
+        #Rcode = 'library(testthat); if (all(data.frame(test_dir("."))[, "failed"])) stop("Some tests failed.")'
+        Rcode =  "library(testthat); res <- test_dir('.', reporter='summary'); if (any(res$failed > 0)) stop('Some tests failed.')"
         cmd = ["Rscript", "-e", Rcode]
         execute_command(cmd, direct_io=True, cwd=path)
