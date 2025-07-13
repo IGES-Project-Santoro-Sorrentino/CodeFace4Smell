@@ -38,8 +38,8 @@ from codeface.commit_analysis import (getSignoffCount, getSignoffEtcCount,
 from codeface.cluster.PersonInfo import RelationWeight
 from codeface.VCS import gitVCS
 from codeface.dbmanager import DBManager, tstamp_to_sql
-from . import PersonInfo
-from . import idManager
+from codeface.cluster.PersonInfo import PersonInfo
+from codeface.cluster.idManager import idManager
 from codeface.linktype import LinkType
 
 #Global Constants
@@ -775,10 +775,14 @@ def removePriorCommits(fileState, clist, startDate):
     for (lineNum, cmtId) in fileState.items():
 
         if cmtId in clist:
-            #get commit object containing commit date
             cmtObj = clist[cmtId]
-
-            if( cmtObj.getCdate() >= startDate ):
+            #get commit object containing commit date
+            cdate = cmtObj.getCdate()
+            if isinstance(cdate, bytes):
+                cdate = cdate.decode('utf-8')
+            if isinstance(startDate, bytes):
+                startDate = startDate.decode('utf-8')
+            if cdate >= startDate:
                 modFileState[lineNum] = cmtId
         #else:
             # if the commit is not found in clist then we know it is a commit
@@ -1147,7 +1151,7 @@ def writeSubsysPerAuthorData2File(id_mgr, outdir):
         for subsys in id_mgr.getSubsysNames() + ["general"]:
             outstr += "\t{0}".format(subsys_fraction[subsys])
         lines.append(outstr)
-    out = open(os.path.join(outdir, "id_subsys.txt"), 'wb')
+    out = open(os.path.join(outdir, "id_subsys.txt"), 'w')
     out.writelines(lines)
     out.close()
 
@@ -1258,7 +1262,7 @@ def writeAdjMatrix2File(id_mgr, outdir, conf):
     # off to utilise this fact for more efficient storage.
 
     link_type = conf["tagging"]
-    out = open(os.path.join(outdir, "adjacencyMatrix.txt"), 'wb')
+    out = open(os.path.join(outdir, "adjacencyMatrix.txt"), 'w')
     idlist = sorted(id_mgr.getPersons().keys())
     # Header
     out.write("" +
@@ -1299,7 +1303,7 @@ def writeAdjMatrixMaxWeight2File(id_mgr, outdir, conf):
     # off to utilise this fact for more efficient storage.
 
     link_type = conf["tagging"]
-    out = open(os.path.join(outdir, "adjacencyMatrix_max_weight.txt"), 'wb')
+    out = open(os.path.join(outdir, "adjacencyMatrix_max_weight.txt"), 'w')
     idlist = sorted(id_mgr.getPersons().keys())
     # Header
     out.write("" +
@@ -1425,8 +1429,13 @@ def computeLogicalDepends(fileCommit_list, cmt_dict, start_date):
               func_depends_count[cmt_id] = []
 
           if cmt_id in cmt_dict:
+            cdate = cmt_dict[cmt_id].getCdate()
+            if isinstance(cdate, bytes):
+                cdate = cdate.decode('utf-8')
+            if isinstance(start_date, bytes):
+                start_date = start_date.decode('utf-8')
             # If line is older than start date then ignore
-            if cmt_dict[cmt_id].getCdate() >= start_date:
+            if cdate >= start_date:
               func_id = file.findFuncId(line_num)
               func_loc = [(filename, func_id)]
               if cmt_id in func_depends:
@@ -1485,8 +1494,13 @@ def compute_logical_depends_features(file_commit_list, cmt_dict, start_date):
                 fexpr_depends_count[cmt_id] = []
 
             if cmt_id in cmt_dict:
+                cdate = cmt_dict[cmt_id].getCdate()
+                if isinstance(cdate, bytes):
+                    cdate = cdate.decode('utf-8')
+                if isinstance(start_date, bytes):
+                    start_date = start_date.decode('utf-8')
                 # If line is older than start date then ignore
-                if cmt_dict[cmt_id].getCdate() >= start_date:
+                if cdate >= start_date:
                     feature_list = file.findFeatureList(line_num)
                     feature_expression_list = file.findFeatureExpression(line_num)
 

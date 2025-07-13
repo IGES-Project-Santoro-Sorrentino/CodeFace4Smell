@@ -253,7 +253,10 @@ def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
     If direct_io is True, do not capture the stdin and stdout of the command
     Returns the stdout of the command.
     '''
-    jcmd = " ".join(cmd)
+    jcmd = " ".join(
+        x.decode('utf-8') if isinstance(x, bytes) else str(x)
+        for x in cmd
+    )
     log.debug("Running command: {}".format(jcmd))
     try:
         if direct_io:
@@ -344,7 +347,10 @@ def generate_report(start_rev, end_rev, resdir):
     cmd.append(resdir)
     cmd.append("{0}--{1}".format(start_rev, end_rev))
     with open(os.path.join(resdir, report_base + ".tex"), 'w') as f:
-        f.write(execute_command(cmd))
+        output = execute_command(cmd)
+        if isinstance(output, bytes):
+            output = output.decode('utf-8')
+        f.write(output)
 
     # Compile report with lualatex
     cmd = []
@@ -407,11 +413,11 @@ def check4ctags():
 
     res = execute_command(cmd, None)
 
-    if not(res.startswith(prog_name)):
+    if not(res.decode().startswith(prog_name)):
         log.error("program '{0}' does not exist".format(prog_name))
         raise Exception("ctags-exuberant not found")
 
-    if not(res.startswith(prog_version)):
+    if not(res.decode().startswith(prog_version)):
         # TODO: change this to use standard mechanism for error logging
         log.error("Ctags version '{0}' not found".format(prog_version))
         raise Exception("Incompatible ctags-exuberant version")
@@ -426,7 +432,7 @@ def check4cppstats():
     line = "cppstats v0.8.4"
     cmd = "/usr/bin/env cppstats --version".split()
     res = execute_command(cmd)
-    if not (res.startswith(line)):
+    if not (res.decode().startswith(line)):
         error_message = "expected the first line to start with '{0}' but "\
                         "got '{1}'".format(line, res[0])
         log.error("program cppstats does not exist, or it is not working "
@@ -435,14 +441,15 @@ def check4cppstats():
         raise Exception("no working cppstats found ({0})"
                         .format(error_message))
 
-
 def parse_iso_git_date(date_string):
+    # Ensure input is a string, not bytes
+    if isinstance(date_string, bytes):
+        date_string = date_string.decode('utf-8')
     # from http://stackoverflow.com/questions/526406/python-time-to-age-part-2-timezones
     try:
         offset = int(date_string[-5:])
-    except:
-        log.error("could not extract timezone info from \"{0}\""
-                  .format(date_string))
+    except Exception:
+        log.error('could not extract timezone info from "{0}"'.format(date_string))
         raise
     minutes = (offset if offset > 0 else -offset) % 100
     delta = timedelta(hours=offset / 100,

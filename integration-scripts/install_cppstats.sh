@@ -14,10 +14,13 @@ echo '#!/bin/bash' > $CPPSTATS/cppstats
 echo "cd $CPPSTATS" >> $CPPSTATS/cppstats
 echo "PYTHONPATH=\"\$PYTHONPATH:$CPPSTATS/lib\" ./cppstats.py \"\$@\"" >> $CPPSTATS/cppstats
 chmod +x $CPPSTATS/cppstats
-wget --quiet http://sdml.info/lmcrs/srcML-Ubuntu12.04-64.tar.gz -O /tmp/srcML.tar.gz
+# wget --quiet http://sdml.info/lmcrs/srcML-Ubuntu12.04-64.tar.gz -O /tmp/srcML.tar.gz
+wget --quiet https://github.com/srcML/srcML/releases/download/v1.0.0/srcml_1.0.0-1_ubuntu18.04.tar.gz -O /tmp/srcML.tar.gz
 tar -xvf /tmp/srcML.tar.gz
-cp -rf $PWD/srcML/* $CPPSTATS/lib/srcml/linux/
+# cp -rf $PWD/srcML/* $CPPSTATS/lib/srcml/linux/
 
 sudo ln -sf $CPPSTATS/cppstats /usr/local/bin/cppstats
+#
+sudo ln -s /usr/bin/python3 /usr/bin/python
 
 cd ..

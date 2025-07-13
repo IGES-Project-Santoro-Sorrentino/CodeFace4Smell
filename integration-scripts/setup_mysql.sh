@@ -3,7 +3,7 @@
 # Configura MySQL per partire correttamente in background e impostare password root
 echo "Configurazione di MySQL..."
 
-DATAMODEL = "./datamodel/codeface_schema.sql"
+DATAMODEL="./datamodel/codeface_schema.sql"
 
 # Inizializza il database (utile se non è già presente)
 mysqld --initialize-insecure --user=mysql
@@ -27,11 +27,22 @@ GRANT SUPER ON *.* TO 'codeface'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-mysql -u codeface -p codeface < ./datamodel/codeface_schema.sql
+set -e
 
-cat "${DATAMODEL}" | \
+mysql -u codeface -pcodeface < "$DATAMODEL"
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to load codeface_schema.sql"
+  exit 1
+fi
+
+cat "$DATAMODEL" | \
   sed -e 's/codeface/codeface_testing/g' | \
-  mysql -u codeface -p codeface
+  mysql -u codeface -pcodeface
+
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to import modified DATAMODEL"
+  exit 1
+fi
 
 # Ferma MySQL, verrà riavviato dallo script di avvio del container
-service mysql stop
+# service mysql stop

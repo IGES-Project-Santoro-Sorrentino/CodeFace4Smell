@@ -10,6 +10,7 @@ RUN apt-get update && \
     gnupg2 \
     ca-certificates \
     nano \
+    wget \
     software-properties-common \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -46,6 +47,9 @@ RUN bash integration-scripts/install_codeface_R.sh
 RUN bash integration-scripts/install_codeface_node.sh
 RUN bash integration-scripts/install_codeface_python.sh
 RUN bash integration-scripts/install_cppstats.sh
+
+# # Set up the database
+COPY datamodel/ datamodel/
 RUN bash integration-scripts/setup_mysql.sh
 
 COPY rpackages/ rpackages/
@@ -63,9 +67,10 @@ COPY setup.py setup.py
 COPY . .
 
 # Preparo codeface dopo eseguito il login
-# RUN chmod +x start_server.sh && echo "bash start_server.sh" >> /home/.bashrc
+RUN chmod +x ./start_server.sh
+# RUN ./start_server.sh
 
 # Expose ports
 EXPOSE 22 8081 8100
-RUN service mysql start
+# RUN service mysql start
 CMD ["/usr/sbin/sshd", "-D"]

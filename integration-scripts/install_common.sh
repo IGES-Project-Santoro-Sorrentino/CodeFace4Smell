@@ -5,10 +5,11 @@ echo "Providing common binaries and libraries"
 # echo "mysql-server mysql-server/root_password password" | sudo debconf-set-selections
 # echo "mysql-server mysql-server/root_password_again password" | sudo debconf-set-selections
 
-apt-get update && apt-get install -yy --no-install-recommends \
+apt-get update && apt-get install -yyyyy --no-install-recommends \
     texlive doxygen graphviz default-jdk default-jre \
     mysql-server mysql-client libmysqlclient-dev \
     python3 python3-dev python3-pip python3-numpy python3-matplotlib \
+    python python-notify python-lxml\
     python3-lxml python3-setuptools python3-yaml python3-mock \
     build-essential gcc gfortran libxml2-dev libcurl4-openssl-dev \
     libcairo2-dev libxt-dev \

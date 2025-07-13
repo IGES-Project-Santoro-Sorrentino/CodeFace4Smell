@@ -475,7 +475,7 @@ def get_feature_lines_from_file(file_layout_src, filename):
     # generate a source code file from the file_layout_src dictionary
     # and save it to a temporary location
     for line in file_layout_src:
-        srcFile.write(line)
+        srcFile.write(line.encode('utf-8'))
     srcFile.flush()
 
     # run cppstats analysis on the file to get the feature locations
@@ -736,7 +736,7 @@ class gitVCS (VCS):
 
     def _Logstring2ID(self, str):
         """Extract the commit ID from a log string."""
-        match = self.logPattern.search(str)
+        match = self.logPattern.search(str.decode('utf-8'))
         if not(match):
             log.critical("_Logstring2ID could not parse log string!")
             raise Error("_Logstring2ID could not parse log string!")
@@ -749,7 +749,7 @@ class gitVCS (VCS):
         Must be implemented by every VCS. Turns a string from the list
         returned by getCommitIDsLL into a commit.Commit instance"""
 
-        match = self.logPattern.search(str)
+        match = self.logPattern.search(str.decode('utf-8'))
         if not(match):
             log.critical("_Logstring2Commit could not parse log string!")
             raise Error("_Logstring2Commit could not parse log string!")
@@ -774,17 +774,17 @@ class gitVCS (VCS):
         matched = False
 
         try:
-            match = self.diffStatFilesPattern.search(msg[-1])
+            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
             if (match):
                 files = match.group(1)
                 matched = True
 
-            match = self.diffStatInsertPattern.search(msg[-1])
+            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
             if (match):
                 insertions = match.group(1)
                 matched = True
 
-            match = self.diffStatDeletePattern.search(msg[-1])
+            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
             if (match):
                 deletions = match.group(1)
                 matched = True
@@ -792,6 +792,9 @@ class gitVCS (VCS):
             # Check if this is a genuine empty commit
             # Since the commit message is indented by 4 spaces
             # we check if the last line of the commit still starts this way.
+            line = msg[-1]
+            if isinstance(line, bytes):
+                line = line.decode('utf-8')
             if not matched and msg[-1].startswith("    "):
                 log.devinfo("Empty commit. Commit <id {}> is: '{}'".
                             format(cmt.id, msg))
@@ -902,7 +905,7 @@ class gitVCS (VCS):
         # by line breaks, so restore the original state first and then
         # do a decomposition into parts
 
-        parts = msg.split("\n\n")
+        parts = msg.decode().split("\n\n")
 
         # Find the chunk that contains the commit id (for 99.9% of all
         # commits, this is chunk 0, but things are different for tags.
@@ -1094,7 +1097,7 @@ class gitVCS (VCS):
 
         while msg:
 
-            line = msg.pop(0).split(" ")
+            line = msg.pop(0).decode().split(" ")
 
             #the lines we want to match start with a commit hash
             if(self.cmtHashPattern.match( line[0] ) ):
@@ -1171,14 +1174,19 @@ class gitVCS (VCS):
 
             #store commit hash in fileCommit object, store only the hash
             #and then reference the commit db to get the object
-            file_commit.setCommitList([cmt.id for cmt in cmtList])
+            if cmtList is not None:
+                file_commit.setCommitList([cmt.id for cmt in cmtList])
+            else:
+                file_commit.setCommitList([])
+            # file_commit.setCommitList([cmt.id for cmt in cmtList])
 
             #store the commit object to the committerDB, the justification
             #for splitting this way is to avoid redundant commit info
             #since a commit can touch many files, we use the commit
             #hash to reference the commit object (author, date etc)
-            self._commit_dict.update({cmt.id:cmt for cmt in cmtList
-             if cmt.id not in self._commit_dict})
+            if cmtList is not None:
+                self._commit_dict.update({cmt.id:cmt for cmt in cmtList
+                if cmt.id not in self._commit_dict})
 
             #Determine the revision that git blame will be called on
             if self.range_by_date:
@@ -1360,10 +1368,10 @@ class gitVCS (VCS):
         if fileExt in (".java", ".j", ".jav", ".cs", ".js"):
             structures.append("m") # methods
             structures.append("i") # interface
-        elif fileExt in (".php"):
+        elif fileExt in [".php"]:
             structures.append("i") # interface
             structures.append("j") # functions
-        elif fileExt in (".py"):
+        elif fileExt in [".py"]:
             structures.append("m") # class members
 
         while(tags.next(entry)):
@@ -1408,7 +1416,7 @@ class gitVCS (VCS):
         # and save it to a temporary location
         srcFile = tempfile.NamedTemporaryFile(suffix=fileExt)
         for line in file_layout_src:
-            srcFile.write(line)
+            srcFile.write(line.encode('utf-8'))
         srcFile.flush()
 
         # For certain programming languages we can use doxygen for a more
@@ -1502,8 +1510,8 @@ class gitVCS (VCS):
                    '.d', '.php4', '.php5', '.inc', '.phtml', '.m', '.mm',
                    '.f', '.for', '.f90', '.idl', '.ddl', '.odl', '.tcl')
 
-        fileNames = [fileName for fileName in all_files if
-                     fileName.lower().endswith(fileExt)]
+        fileNames = [fileName for fileName in all_files if 
+                     fileName.decode('utf-8').lower().endswith(fileExt)]
 
         self.setFileNames(fileNames)
 

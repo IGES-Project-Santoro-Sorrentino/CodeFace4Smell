@@ -18,7 +18,7 @@
 
 # Short python example to test and illustrate the ID service
 import httplib
-import urllib
+import urllib.parse
 import json
 
 server="localhost"
@@ -26,7 +26,7 @@ port=8080
 
 def query_user_id(conn, projectID, name, email):
     
-    params = urllib.urlencode({'projectID': projectID,
+    params = urllib.parse.urlencode({'projectID': projectID,
                                'name': name,
                                'email': email})
     headers = {"Content-type": "application/x-www-form-urlencoded; charset=utf-8",
