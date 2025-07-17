@@ -22,7 +22,15 @@ source("shiny/widgets.r", chdir=TRUE)
 # Only look at the first project in the database
 projects.selected = 1:1
 
-for(pid.num in projects.list$id[projects.selected]) {
+# Check if there are any projects in the database
+if (nrow(projects.list) == 0) {
+  cat("Warning: No projects found in database. Skipping widget tests.\n")
+  # Create a dummy test to indicate the issue
+  test_that("Database contains projects", {
+    skip("No projects found in database - database may not be set up for testing")
+  })
+} else {
+  for(pid.num in projects.list$id[projects.selected]) {
   #print(paste("Testing PID", pid.num))
   pid <- reactive({ pid.num })
   pid.num <- isolate(pid())
@@ -42,5 +50,6 @@ for(pid.num in projects.list$id[projects.selected]) {
       isolate(l())
     })
   }
-}
+  }  # Close the for loop for projects
+}  # Close the else block for when projects exist
 

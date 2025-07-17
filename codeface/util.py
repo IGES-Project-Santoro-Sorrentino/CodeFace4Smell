@@ -117,7 +117,7 @@ class BatchJobPool(object):
             return None
         job_id = self.next_id
         self.next_id += 1
-        j = BatchJob(id=job_id, func=func, args=args, kwargs=kwargs, startmsg=startmsg, endmsg=endmsg)
+        j = BatchJob(id=job_id, func=func, deps=deps, args=args, kwargs=kwargs, startmsg=startmsg, endmsg=endmsg)
         self.jobs[job_id] = j
         return job_id
 
@@ -273,19 +273,23 @@ def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
             log.warning("Command '{}' failed with exit code {}. Ignored.".
                     format(jcmd, pipe.returncode))
         else:
-            if not direct_io:
+            if not direct_io and stdout is not None and stderr is not None:
                 log.info("Command '{}' stdout:".format(jcmd))
                 for line in stdout.splitlines():
                     log.info(line)
                 log.info("Command '{}' stderr:".format(jcmd))
                 for line in stderr.splitlines():
                     log.info(line)
-            msg = "Command '{}' failed with exit code {}. \n" \
-                  "(stdout: {}\nstderr: {})"\
-                  .format(jcmd, pipe.returncode, stdout, stderr)
+            
+            if direct_io:
+                msg = "Command '{}' failed with exit code {}.".format(jcmd, pipe.returncode)
+            else:
+                msg = "Command '{}' failed with exit code {}. \n" \
+                      "(stdout: {}\nstderr: {})"\
+                      .format(jcmd, pipe.returncode, stdout, stderr)
             log.error(msg)
             raise Exception(msg)
-    return stdout
+    return stdout if not direct_io else None
 
 def _convert_dot_file(dotfile):
     '''

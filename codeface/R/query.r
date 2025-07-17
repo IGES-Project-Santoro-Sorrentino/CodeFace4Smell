@@ -42,6 +42,9 @@ query.series.merged <- function(conf, subset=NULL) {
 
 ## Obtain the data for the timeseries identified by a specific plot.id
 query.timeseries <- function(con, plot.id, subset=NULL) {
+  if(is.null(plot.id)) {
+    stop("query.timeseries called with NULL plot.id")
+  }
   query <- str_c("SELECT time, value, value_scaled ",
                  "FROM timeseries WHERE plotId=",
                  plot.id)
@@ -104,9 +107,11 @@ query.projects <- function(con, analysis.method=NULL) {
 
 ## Obtain all (db-internal) release range identifier for a project
 query.range.ids.con <- function(con, pid) {
+  if (is.null(pid)) {
+    stop("query.range.ids.con called with NULL pid")
+  }
   dat <- dbGetQuery(con, str_c("SELECT id FROM release_range where projectID=",
                                     pid))
-
   return(dat$id)
 }
 

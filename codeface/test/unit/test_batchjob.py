@@ -94,7 +94,8 @@ class Testpool(unittest.TestCase):
         try:
             pool.join()
         except Exception as e:
-            self.assertIn("IOError", str(e))
+            # In Python 3, IOError is an alias for OSError, FileNotFoundError is a subclass
+            self.assertTrue(any(err in str(e) for err in ["IOError", "FileNotFoundError", "OSError"]))
             raised = True
         self.assertEqual(raised, True)
 

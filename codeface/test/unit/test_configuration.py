@@ -35,37 +35,34 @@ class TestConfiguration(unittest.TestCase):
     def testLoad(self):
         '''Test that an example configuration is loaded correctly'''
         global_conf = NamedTemporaryFile(mode="w",delete=False)
-        global_conf.write("""
-                # Foo commentary! A:B
-                ---
-                # Fake Database access information
-                dbhost: remotehost
-                dbuser: 'theuser'
-                dbpwd: thepassword
-                dbname: 'thedb'
-                # intermediate comment
-                idServicePort: 4242
-                idServiceHostname: foohost
-                        """)
+        global_conf.write("""# Foo commentary! A:B
+---
+# Fake Database access information
+dbhost: remotehost
+dbuser: 'theuser'
+dbpwd: thepassword
+dbname: 'thedb'
+# intermediate comment
+idServicePort: 4242
+idServiceHostname: foohost
+""")
         global_conf.close()
         project_conf = NamedTemporaryFile(mode="w",delete=False)
-        project_conf.write("""
-                # Fake commentary!
-
-                ---
-                project: theproject
-                repo: therepo # Relative to git-dir as specified on the command line
-                description: the description
-                ml: the mailing list
-                revisions: [ "v1", "v2", "v3",
-                        "v4",
-                        "v5"]
-                rcs : ["v1rc0", "v2rc0", "v3rc0", "v4rc0",
-                "v5rc0"
-                ]
-                new_tag: newvalue
-                tagging: tag
-                """)
+        project_conf.write("""# Fake commentary!
+---
+project: theproject
+repo: therepo # Relative to git-dir as specified on the command line
+description: the description
+ml: the mailing list
+revisions: [ "v1", "v2", "v3",
+        "v4",
+        "v5"]
+rcs : ["v1rc0", "v2rc0", "v3rc0", "v4rc0",
+"v5rc0"
+]
+new_tag: newvalue
+tagging: tag
+""")
         project_conf.close()
         c = Configuration.load(global_conf.name, project_conf.name)
         self.assertEqual(c["dbhost"], "remotehost")
@@ -105,42 +102,37 @@ class TestConfiguration(unittest.TestCase):
     def testFail(self):
         '''Test the failure modes of configuration'''
         global_conf = NamedTemporaryFile(mode="w",delete=False)
-        global_conf.write("""
-                # Foo commentary! A:B
-                ---
-                # Fake Database access information
-                dbhost: remotehost
-                dbuser: theuser
-                dbpwd: thepassword
-                dbname: thedb
-                # intermediate comment
-                idServicePort: 4242
-                idServiceHostname: foohost
-                        """)
+        global_conf.write("""# Foo commentary! A:B
+---
+# Fake Database access information
+dbhost: remotehost
+dbuser: theuser
+dbpwd: thepassword
+dbname: thedb
+# intermediate comment
+idServicePort: 4242
+idServiceHostname: foohost
+""")
         global_conf.close()
         project_conf_1 = NamedTemporaryFile(mode="w",delete=False)
-        project_conf_1.write("""
-                # Fake commentary!
-
-                ---
-                project: theproject
-                Parse error! ""
-                """)
+        project_conf_1.write("""# Fake commentary!
+---
+project: theproject
+Parse error! ""
+""")
         project_conf_1.close()
 
         # project conf wirh wrong number of rcs tags
         project_conf_2 = NamedTemporaryFile(mode="w",delete=False)
-        project_conf_2.write("""
-                # Fake commentary!
-
-                ---
-                project: theproject
-                repo: therepo # Relative to git-dir as specified on the command line
-                description: the description
-                ml: the mailing list
-                revisions: [ "v1", "v2", "v3",
-                        "v4",
-                        "v5"]
+        project_conf_2.write("""# Fake commentary!
+---
+project: theproject
+repo: therepo # Relative to git-dir as specified on the command line
+description: the description
+ml: the mailing list
+revisions: [ "v1", "v2", "v3",
+        "v4",
+        "v5"]
                 rcs : ["v1rc0", "v3rc0", "v4rc0",
 
                 "v5rc0"

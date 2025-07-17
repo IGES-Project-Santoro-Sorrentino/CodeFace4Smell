@@ -15,7 +15,8 @@ apt-get update && apt-get install -yyyyy --no-install-recommends \
     libcairo2-dev libxt-dev \
     nodejs git subversion sloccount exuberant-ctags screen \
     xorg-dev libglu1-mesa-dev libgles2-mesa-dev \
-    libpoppler-dev libpoppler-glib-dev libarchive-dev r-base default-libmysqlclient-dev
+    libpoppler-dev libpoppler-glib-dev libarchive-dev r-base default-libmysqlclient-dev \
+    xsltproc
 
 # Lista dei pacchetti da verificare
 packages=(
@@ -28,6 +29,7 @@ packages=(
     nodejs git subversion sloccount exuberant-ctags screen
     xorg-dev libglu1-mesa-dev libgles2-mesa-dev
     libpoppler-dev libpoppler-glib-dev libarchive-dev r-base default-libmysqlclient-dev
+    xsltproc
 )
 
 missing=()
