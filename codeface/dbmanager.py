@@ -19,7 +19,9 @@
 
 import MySQLdb as mdb
 from datetime import datetime
-from logging import getLogger; log = getLogger(__name__)
+from logging import getLogger; 
+
+log = getLogger(__name__)
 from contextlib import contextmanager
 
 @contextmanager

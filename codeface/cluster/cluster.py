@@ -165,7 +165,7 @@ def computeSnapshotCollaboration(file_commit, cmtList, id_mgr, link_type,
         # check if commit is in the current revision of the file, if it is not
         # we no longer have a need to process further since the commit is now
         # irrelevant
-        if not(cmt.id in fileState_mod.values()):
+        if not cmt.id in fileState_mod.values():
             continue
 
         #find code lines of interest, these are the lines that are localized
@@ -221,9 +221,9 @@ def compute_snapshot_collaboration_features(
         file_state_mod = file_state.copy()
 
         # check if commit is in the current revision of the file, if it is
-        # not we no longer have a need to process further since the commit
+        # not we no longer have a need to process further sifnce the commit
         # is now irrelevant
-        if not (cmt.id in file_state_mod.values()):
+        if not cmt.id in file_state_mod.values():
             continue
 
         # find code lines of interest, these are the lines that are
