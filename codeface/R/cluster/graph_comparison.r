@@ -139,8 +139,8 @@ graph.comparison <- function(g.1, g.2) {
   adj.matrix.2.intersect <- g.2[idx.2, idx.2]
 
   ## Build igraph graph objects
-  g.1.intersect <- graph.adjacency(adj.matrix.1.intersect, mode = "directed")
-  g.2.intersect <- graph.adjacency(adj.matrix.2.intersect, mode = "directed")
+  g.1.intersect <- graph_from_adjacency_matrix(adj.matrix.1.intersect, mode = "directed")
+  g.2.intersect <- graph_from_adjacency_matrix(adj.matrix.2.intersect, mode = "directed")
 
   graph.diff <- graph.difference(g.1.intersect, g.2.intersect)
 

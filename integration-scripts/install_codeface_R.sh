@@ -3,49 +3,53 @@
 echo "Providing R libraries"
 
 apt-get update && apt-get install -yy \
-    dirmngr \
-    gnupg \
-    apt-transport-https \
-    libcurl4-gnutls-dev \
     libxml2-dev \
     libgit2-dev \
     libssl-dev \
     libglpk-dev \
-    locales \
     r-base \
     r-base-dev \
     libx11-dev \
     libssh2-1-dev \
-    zlib1g-dev \
-    libblas-dev \
-    liblapack-dev \
-    libgmp-dev \
-    libarpack2-dev \
-    libgfortran5 \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    libgsl-dev \
+    graphviz \
+    libmysqlclient-dev \
+    libcurl4-openssl-dev \
+    libudunits2-dev \
+    libgraphviz-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Lista dei pacchetti da verificare
 packages=(
-    dirmngr
-    gnupg
-    libcurl4-gnutls-dev
-    apt-transport-https
-    # libcurl4-openssl-dev
     libxml2-dev
     libgit2-dev
     libssl-dev
     libglpk-dev
-    locales
     r-base
     r-base-dev
     libx11-dev
     libssh2-1-dev
     zlib1g-dev
-    libblas-dev
-    liblapack-dev
-    libgmp-dev
-    libarpack2-dev
-    libgfortran5
+    libharfbuzz-dev
+    libfribidi-dev
+    libfreetype6-dev
+    libpng-dev
+    libgdal-dev
+    libgeos-dev
+    libproj-dev
+    libgsl-dev
+    graphviz
+    libmysqlclient-dev
+    libcurl4-openssl-dev
+    libudunits2-dev
+    libgraphviz-dev
 )
 
 missing=()

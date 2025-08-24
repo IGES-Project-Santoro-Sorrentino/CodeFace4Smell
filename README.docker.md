@@ -21,13 +21,7 @@
    docker exec codeface4smell /bin/bash
    ```
 
-2. **Installa le dipendenze di python**
-
-   ```bash
-   pip3 install -e .
-   ```
-
-3. **Lancia codeface**
+2. **Lancia codeface**
 
    ```bash
    ./start_server.sh
