@@ -5,6 +5,9 @@ echo "Configurazione di MySQL..."
 
 DATAMODEL="./datamodel/codeface_schema.sql"
 
+# Copia la configurazione MySQL personalizzata
+cp ./integration-scripts/mysql.cnf /etc/mysql/mysql.conf.d/codeface.cnf
+
 # Inizializza il database (utile se non è già presente)
 mysqld --initialize-insecure --user=mysql
 
@@ -25,6 +28,11 @@ GRANT ALL PRIVILEGES ON codeface_testing.* TO 'codeface'@'localhost';
 GRANT SUPER ON *.* TO 'codeface'@'localhost';
 
 FLUSH PRIVILEGES;
+EOF
+
+# Abilita local_infile per permettere ai script R di caricare dati locali
+mysql -u root -pcodeface <<EOF
+SET GLOBAL local_infile = 1;
 EOF
 
 set -e

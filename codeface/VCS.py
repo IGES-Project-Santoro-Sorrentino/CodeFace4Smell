@@ -35,6 +35,7 @@
 # TODO: Unify range handling. Either a range is always a list, or always
 # represented by two parameters.
 import itertools
+import json
 import readline
 
 from . import commit
@@ -42,12 +43,12 @@ from . import fileCommit
 import re
 import os
 import bisect
+# import pyctags as ctags
 import tempfile
 from . import sourceAnalysis
 import shutil
-from codeface.fileCommit import FileDict
+from .fileCommit import FileDict
 from progressbar import ProgressBar, Percentage, Bar, ETA
-from ctags import CTags, TagEntry
 from logging import getLogger
 from codeface.linktype import LinkType
 
@@ -444,8 +445,20 @@ def get_feature_lines(parsed_lines, filename):
             # otherwise, add empty list
             fexpr_lines.add_line(line, [])
 
+    # Replace an empty list of features or an empty feature expression with
+    # the 'Base_Feature' constant
+    feature_lines_with_base = FileDict()
+    for line_nr in feature_lines:
+        features = feature_lines.get_line_info_raw(line_nr)
+        feature_lines_with_base.add_line(line_nr, features if bool(features) else ['Base_Feature'])
+
+    fexpr_lines_with_base = FileDict()
+    for line_nr in fexpr_lines:
+        fexpr = fexpr_lines.get_line_info_raw(line_nr)
+        fexpr_lines_with_base.add_line(line_nr, fexpr if bool(fexpr) else ['Base_Feature'])
+
     # return feature lines and feature-expression lines
-    return (feature_lines, fexpr_lines)
+    return (feature_lines_with_base, fexpr_lines_with_base)
 
 
 def get_feature_lines_from_file(file_layout_src, filename):
@@ -475,7 +488,7 @@ def get_feature_lines_from_file(file_layout_src, filename):
     # generate a source code file from the file_layout_src dictionary
     # and save it to a temporary location
     for line in file_layout_src:
-        srcFile.write(line.encode('utf-8'))
+        srcFile.write(line)
     srcFile.flush()
 
     # run cppstats analysis on the file to get the feature locations
@@ -501,7 +514,7 @@ def get_feature_lines_from_file(file_layout_src, filename):
         srcFile.close()
         featurefile.close()
         os.remove(srcFile.name)
-    except (Exception, IOError):
+    except (Exception, IOError) as e:
         import sys
         error_type, error_value, traceback = sys.exc_info()
         log.warning("IGNORING cppstats failure ({0}, {1}), "
@@ -736,7 +749,7 @@ class gitVCS (VCS):
 
     def _Logstring2ID(self, str):
         """Extract the commit ID from a log string."""
-        match = self.logPattern.search(str.decode('utf-8'))
+        match = self.logPattern.search(str)
         if not(match):
             log.critical("_Logstring2ID could not parse log string!")
             raise Error("_Logstring2ID could not parse log string!")
@@ -749,7 +762,7 @@ class gitVCS (VCS):
         Must be implemented by every VCS. Turns a string from the list
         returned by getCommitIDsLL into a commit.Commit instance"""
 
-        match = self.logPattern.search(str.decode('utf-8'))
+        match = self.logPattern.search(str)
         if not(match):
             log.critical("_Logstring2Commit could not parse log string!")
             raise Error("_Logstring2Commit could not parse log string!")
@@ -774,17 +787,17 @@ class gitVCS (VCS):
         matched = False
 
         try:
-            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
+            match = self.diffStatFilesPattern.search(msg[-1])
             if (match):
                 files = match.group(1)
                 matched = True
 
-            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
+            match = self.diffStatInsertPattern.search(msg[-1])
             if (match):
                 insertions = match.group(1)
                 matched = True
 
-            match = self.diffStatFilesPattern.search(msg[-1].decode('utf-8'))
+            match = self.diffStatDeletePattern.search(msg[-1])
             if (match):
                 deletions = match.group(1)
                 matched = True
@@ -792,9 +805,6 @@ class gitVCS (VCS):
             # Check if this is a genuine empty commit
             # Since the commit message is indented by 4 spaces
             # we check if the last line of the commit still starts this way.
-            line = msg[-1]
-            if isinstance(line, bytes):
-                line = line.decode('utf-8')
             if not matched and msg[-1].startswith("    "):
                 log.devinfo("Empty commit. Commit <id {}> is: '{}'".
                             format(cmt.id, msg))
@@ -905,7 +915,7 @@ class gitVCS (VCS):
         # by line breaks, so restore the original state first and then
         # do a decomposition into parts
 
-        parts = msg.decode().split("\n\n")
+        parts = msg.split("\n\n")
 
         # Find the chunk that contains the commit id (for 99.9% of all
         # commits, this is chunk 0, but things are different for tags.
@@ -1097,7 +1107,7 @@ class gitVCS (VCS):
 
         while msg:
 
-            line = msg.pop(0).decode().split(" ")
+            line = msg.pop(0).split(" ")
 
             #the lines we want to match start with a commit hash
             if(self.cmtHashPattern.match( line[0] ) ):
@@ -1174,19 +1184,14 @@ class gitVCS (VCS):
 
             #store commit hash in fileCommit object, store only the hash
             #and then reference the commit db to get the object
-            if cmtList is not None:
-                file_commit.setCommitList([cmt.id for cmt in cmtList])
-            else:
-                file_commit.setCommitList([])
-            # file_commit.setCommitList([cmt.id for cmt in cmtList])
+            file_commit.setCommitList([cmt.id for cmt in cmtList])
 
             #store the commit object to the committerDB, the justification
             #for splitting this way is to avoid redundant commit info
             #since a commit can touch many files, we use the commit
             #hash to reference the commit object (author, date etc)
-            if cmtList is not None:
-                self._commit_dict.update({cmt.id:cmt for cmt in cmtList
-                if cmt.id not in self._commit_dict})
+            self._commit_dict.update({cmt.id:cmt for cmt in cmtList
+             if cmt.id not in self._commit_dict})
 
             #Determine the revision that git blame will be called on
             if self.range_by_date:
@@ -1201,6 +1206,9 @@ class gitVCS (VCS):
                 cmd.append("--")
                 cmd.append(file_commit.filename)
                 rev = execute_command(cmd).strip()
+
+                if rev=="":
+                  rev = self.rev_end
             else:
                 #Use revision that represents the final commit for the specified
                 #revision range
@@ -1319,8 +1327,14 @@ class gitVCS (VCS):
         try:
             file_analysis.run_analysis()
         except Exception as e:
-            log.critical("doxygen analysis error{0} - defaulting to Ctags".format(e))
+            log.warning("doxygen analysis error '{0}' - returning empty result".format(e))
             return {}, []
+
+        # Doxygen results:
+        # src_elem_list: List of hash tables with bodystart, bodyend, name, mem_kind
+        # comp_kind, comp_name (latter two: ??? refers to some compound)
+        # func_lines: list of hashes line_num: artefact name for _every_ line that
+        # covers an artefact (not just ranges)
 
         # Delete tmp directory storing doxygen files
         shutil.rmtree(tmp_outdir)
@@ -1336,6 +1350,22 @@ class gitVCS (VCS):
             func_lines.update(f_lines)
 
         return func_lines, file_analysis.src_elem_list
+
+    def _parseSrcFileDB(self, src_file):
+        log.debug("Running DB analysis")
+
+        res = DBAnalysis(src_file)
+        # Get src element bounds
+        func_lines = {}
+        for elem in res:
+            # Source indices in DB analysis start at 1, convert to zero based values
+            start = int(elem['start']) - 1
+            end = int(elem['end']) - 1
+            name = elem['name']
+            f_lines = {line_num:name  for line_num in range(start, end+1)}
+            func_lines.update(f_lines)
+
+        return func_lines
 
     def _parseSrcFileCtags(self, src_file):
         # temporary file where we write transient data needed for ctags
@@ -1368,10 +1398,10 @@ class gitVCS (VCS):
         if fileExt in (".java", ".j", ".jav", ".cs", ".js"):
             structures.append("m") # methods
             structures.append("i") # interface
-        elif fileExt in [".php"]:
+        elif fileExt in (".php"):
             structures.append("i") # interface
             structures.append("j") # functions
-        elif fileExt in [".py"]:
+        elif fileExt in (".py"):
             structures.append("m") # class members
 
         while(tags.next(entry)):
@@ -1416,7 +1446,7 @@ class gitVCS (VCS):
         # and save it to a temporary location
         srcFile = tempfile.NamedTemporaryFile(suffix=fileExt)
         for line in file_layout_src:
-            srcFile.write(line.encode('utf-8'))
+            srcFile.write(line)
         srcFile.flush()
 
         # For certain programming languages we can use doxygen for a more
@@ -1428,11 +1458,15 @@ class gitVCS (VCS):
                         '.cpp', '.cxx', '.c', '.cc']):
             func_lines, src_elems = self._parseSrcFileDoxygen(srcFile.name)
             file_commit.setSrcElems(src_elems)
-            file_commit.doxygen_analysis = True
+            file_commit.artefact_line_range = True
+        elif (fileExt in ['sql']):
+            # TODO: Should we use more file extensions?
+            func_lines = self._parseSrcFileDB(srcFile.name)
+            file_commit.artefact_line_range = True
 
         if not func_lines: # for everything else use Ctags
             func_lines = self._parseSrcFileCtags(srcFile.name)
-            file_commit.doxygen_analysis = False
+            file_commit.artefact_line_range = False
 
         # clean up src temp file
         srcFile.close()
@@ -1441,10 +1475,8 @@ class gitVCS (VCS):
         file_commit.setFunctionLines(func_lines)
 
         # save the implementation for each function
-        rmv_char = '[.{}();:\[\]]'
         for line_num, src_line in enumerate(file_layout_src):
-            src_line_rmv = re.sub(rmv_char, ' ', src_line.strip())
-            file_commit.addFuncImplLine(line_num, src_line_rmv)
+            file_commit.addFuncImplLine(line_num, src_line)
 
 
     def cmtHash2CmtObj(self, cmtHash):
@@ -1472,14 +1504,10 @@ class gitVCS (VCS):
 
         #query git to get all committers to a particular file
         #includes commit hash, author and committer data and time
-        cmtList = None
-        try:
-            logMsg = self._getFileCommitInfo(fname, rev_start, rev_end)
-            #store the commit hash to the fileCommitList
-            cmtList = map(self._Logstring2Commit, logMsg)
-        except:
-            log.info("=> Codeface is not able to analyse this. Skipping..")
-        
+        logMsg = self._getFileCommitInfo(fname, rev_start, rev_end)
+
+        #store the commit hash to the fileCommitList
+        cmtList = map(self._Logstring2Commit, logMsg)
 
         return cmtList
 
@@ -1506,12 +1534,12 @@ class gitVCS (VCS):
 
         #filter results to only get implementation files
         fileExt = (".c", ".cc", ".cpp", ".cxx", ".cs", ".asmx", ".m", ".mm",
-                   ".js", ".java", ".j", ".jav", ".php",".py", ".sh", ".rb",
+                   ".js", ".coffee", ".java", ".j", ".jav", ".php",".py", ".sh", ".rb",
                    '.d', '.php4', '.php5', '.inc', '.phtml', '.m', '.mm',
-                   '.f', '.for', '.f90', '.idl', '.ddl', '.odl', '.tcl')
+                   '.f', '.for', '.f90', '.idl', '.ddl', '.odl', '.tcl', 'sql')
 
-        fileNames = [fileName for fileName in all_files if 
-                     fileName.decode('utf-8').lower().endswith(fileExt)]
+        fileNames = [fileName for fileName in all_files if
+                     fileName.lower().endswith(fileExt)]
 
         self.setFileNames(fileNames)
 

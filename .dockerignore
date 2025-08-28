@@ -1,0 +1,9 @@
+.git
+.gitignore
+.vagrant
+.gitattributes
+.idea
+*.md
+restart_docker.sh
+codeface_dump
+codeface_temp

@@ -7,7 +7,7 @@ packages <- c(
   "lubridate", "xtable", "reshape", "stringr", "yaml", "plyr",
   "scales", "gridExtra", "RMySQL", "RJSONIO", "RCurl", "mgcv", "shiny",
   "dtw", "httpuv", "png", "rjson", "lsa", "testthat", "arules", "data.table",
-  "ineq", "igraph", "wordnet", "logging", "statnet", "corrgram"
+  "ineq", "igraph", "wordnet", "logging", "statnet", "corrgram", "markovchain", "psych"
 )
 
 not_installed_packages <- c()

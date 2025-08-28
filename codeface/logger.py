@@ -126,12 +126,9 @@ def _get_log_handler(stream=None):
     FORMAT = "%(asctime)s [$BOLD%(name)s$RESET] %(processName)s %(levelname)s: %(message)s"
     datefmt = '%Y-%m-%d %H:%M:%S'
 
-    try:
-        if hasattr(handler.stream, "fileno") and os.isatty(handler.stream.fileno()):
-            handler.setFormatter(_ColoredFormatter(_insert_seqs(FORMAT), datefmt=datefmt))
-        else:
-            handler.setFormatter(logging.Formatter(_remove_seqs(FORMAT), datefmt=datefmt))
-    except (io.UnsupportedOperation, AttributeError):
+    if hasattr(handler.stream, "fileno") and os.isatty(handler.stream.fileno()):
+        handler.setFormatter(_ColoredFormatter(_insert_seqs(FORMAT), datefmt=datefmt))
+    else:
         handler.setFormatter(logging.Formatter(_remove_seqs(FORMAT), datefmt=datefmt))
     return handler
 

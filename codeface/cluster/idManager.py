@@ -17,7 +17,7 @@
 
 import re
 from email.utils import parseaddr
-from codeface.cluster.PersonInfo import PersonInfo
+from .PersonInfo import PersonInfo
 from logging import getLogger; log = getLogger(__name__)
 import http.client as httplib
 import urllib.parse
@@ -111,7 +111,6 @@ class idManager:
                     "Accept": "text/plain" }
 
         try:
-            print("Trying to connect to ID service at {}:{} with POST /post_user_id".format(self._conn.host, self._conn.port))
             self._conn.request("POST", "/post_user_id", params, headers)
             res = self._conn.getresponse()
         except:
@@ -160,6 +159,6 @@ class idManager:
         # to cause parsing problems in later stages
         name = name.replace('\"', "")
         name = name.replace("\'", "")
-        name = name = name.strip()
+        name = name.strip()
 
         return name

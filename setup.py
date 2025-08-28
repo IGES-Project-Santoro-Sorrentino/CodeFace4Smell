@@ -20,7 +20,8 @@ setup(name='codeface',
                         'mysqlclient',
                         'python-ctags3',
                         'PyYAML == 5.4.1',
-                        'PyMySQL == 1.0.2'
+                        'PyMySQL == 1.0.2',
+                        'jira'
       ],
       python_requires='>=3.6',
 )

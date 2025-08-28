@@ -19,10 +19,11 @@
 
 import MySQLdb as mdb
 from datetime import datetime
-from logging import getLogger; 
-
-log = getLogger(__name__)
+from logging import getLogger;
 from contextlib import contextmanager
+
+# create logger
+log = getLogger(__name__)
 
 @contextmanager
 def _log_db_error(action, args=None):
@@ -35,8 +36,9 @@ def _log_db_error(action, args=None):
             except:
                 pass
         log.critical('MySQL error {e[0]} during "{action}": {e[1]}'
-                ''.format(e=e.args, action=action))
+                     ''.format(e=e.args, action=action))
         raise
+
 
 class DBManager:
     """This class provides an interface to the codeface sql database."""
@@ -52,7 +54,7 @@ class DBManager:
             log.debug(
                 "Establishing MySQL connection to "
                 "{c[dbuser]}@{c[dbhost]}:{c[dbport]}, DB '{c[dbname]}'"
-                .format(c=conf))
+                    .format(c=conf))
         except mdb.Error as e:
             log.critical(
                 "Failed to establish MySQL connection to "
@@ -62,7 +64,7 @@ class DBManager:
             raise
         self.cur = self.con.cursor()
 
-        max_packet_size = 1024*1024*256
+        max_packet_size = 1024 * 1024 * 256
         self.doExec("SET GLOBAL max_allowed_packet=%s", (max_packet_size,))
 
     def __del__(self):
@@ -71,7 +73,8 @@ class DBManager:
 
     def doExec(self, stmt, args=None):
         with _log_db_error(stmt, args):
-            while True:
+            retryCount = 0
+            while retryCount < 10:
                 try:
                     if isinstance(args, list):
                         res = self.cur.executemany(stmt, args)
@@ -79,14 +82,27 @@ class DBManager:
                         res = self.cur.execute(stmt, args)
                     return res
                 except mdb.OperationalError as dbe:
-                    log.info("DBE args: " + str(dbe.args))
-                    if dbe.args[0] == 1213: # Deadlock! retry...
-                        log.warning("Recoverable deadlock in MySQL - retrying.")
-                    elif dbe.args[0] == 2006: # Server gone away...
-                        log.warning("MySQL Server gone away, trying to reconnect.")
+                    retryCount += 1
+                    log.devinfo("DBE args: " + str(dbe.args))
+                    if dbe.args[0] == 1213:  # Deadlock! retry...
+                        log.warning("Recoverable deadlock in MySQL - retrying " \
+                                    "(attempt {}).".format(retryCount))
+                    elif dbe.args[0] == 2006:  # Server gone away...
+                        log.warning("MySQL Server gone away, trying to reconnect " \
+                                    "(attempt {}).".format(retryCount))
+                        self.con.ping(True)
+                    elif dbe.args[0] == 2013:  # Lost connection to MySQL server during query...
+                        log.warning("Lost connection to MySQL server during query, " \
+                                    "trying to reconnect (attempt {}).".format(retryCount))
                         self.con.ping(True)
                     else:
                         raise
+
+            # Give up after ten retry attempts and propagate the
+            # problem to the caller. Callers can either fix the problem with
+            # a different query, or the analysis fails
+            log.error("DB access failed after ten attempts, giving up")
+            raise
 
     def doFetchAll(self):
         with _log_db_error("fetchall"):
@@ -112,16 +128,16 @@ class DBManager:
         if self.cur.rowcount == 0:
             # Project is not contained in the database
             log.devinfo("Creating new project {}/{}".
-                    format(name, analysisMethod))
+                        format(name, analysisMethod))
             self.doExecCommit("INSERT INTO project (name, analysisMethod) " +
-                        "VALUES (%s, %s);", (name, analysisMethod))
+                              "VALUES (%s, %s);", (name, analysisMethod))
             self.doExec("SELECT id FROM project WHERE name=%s;", (name,))
         elif self.cur.rowcount > 1:
             raise Exception("Duplicate projects {}/{} in database!".
-                    format(name, analysisMethod))
+                            format(name, analysisMethod))
         pid = self.doFetchAll()[0][0]
         log.devinfo("Using project {}/{} with ID {}".
-                format(name, analysisMethod, pid))
+                    format(name, analysisMethod, pid))
         return pid
 
     def get_project(self, pid):
@@ -136,6 +152,19 @@ class DBManager:
                     WHERE clusterId={}".format(cid))
         if self.cur.rowcount == 0:
             raise Exception("Cluster id {} not found!".format(cid))
+        return self.doFetchAll()
+
+    def get_file_dev(self, project_id, range_id):
+        self.doExec("SELECT * FROM (SELECT id, commitHash, commitDate, author, description " \
+                    "FROM commit WHERE projectId={} AND releaseRangeId={}) AS Commits " \
+                    "INNER JOIN (SELECT file, commitId, SUM(size) AS fileSize " \
+                    "FROM commit_dependency GROUP BY commitId, file) AS commitFileLOC " \
+                    "ON Commits.id=commitFileLOC.commitId ORDER BY " \
+                    "commitFileLOC.file, commitFileLOC.commitId".format(project_id, range_id))
+
+        if self.cur.rowcount == 0:
+            raise Exception("Could not obtain file-dev information for project {} "\
+                            "(release range {}!".format(project_id, range_id))
         return self.doFetchAll()
 
     def get_release_ranges(self, project_id):
@@ -163,7 +192,7 @@ class DBManager:
                     WHERE projectId={}".format(pid))
         if self.cur.rowcount == 0:
             raise Exception("Persons from project {} not found!".format(pid))
-        return(self.doFetchAll())
+        return (self.doFetchAll())
 
     def getTagID(self, projectID, tag, type):
         """Determine the ID of a tag, given its textual form and the type"""
@@ -171,16 +200,16 @@ class DBManager:
                     "AND tag=%s AND type=%s", (projectID, tag, type))
         if self.cur.rowcount != 1:
             raise Exception("Tag '{}' of type {} is {} times in the DB!".
-                    format(tag, type, self.cur.rowcount))
+                            format(tag, type, self.cur.rowcount))
         return self.doFetchAll()[0][0]
 
     def getCommitId(self, projectId, commitHash):
         self.doExec("SELECT id FROM commit" +
-                   " WHERE commitHash=%s AND projectId=%s"
-                   ,(commitHash, projectId))
+                    " WHERE commitHash=%s AND projectId=%s"
+                    , (commitHash, projectId))
         if self.cur.rowcount == 0:
             raise Exception("Commit from project {} not found!".
-                    format(projectId))
+                            format(projectId))
         return self.doFetchAll()[0][0]
 
     def getRevisionID(self, projectID, tag):
@@ -196,9 +225,37 @@ class DBManager:
                     (projectID, revisionIDs[0], revisionIDs[1]))
         if self.cur.rowcount != 1:
             raise Exception("Release range from '{r[0]}' to '{r[1]}' is {c} "
-                    "times in the DB!".
-                    format(r=revisionIDs, c=self.cur.rowcount))
+                            "times in the DB!".
+                            format(r=revisionIDs, c=self.cur.rowcount))
         return self.doFetchAll()[0][0]
+
+    def getProjectTimeRange(self, pid):
+        """Given a project ID, determine the start and end date of available VCS data.
+           Returns a tuple with start end end date in the form YYYY-MM-DD"""
+        self.doExec("SELECT MIN(date_start) FROM revisions_view "
+                    "WHERE projectId={}".format(pid))
+        if self.cur.rowcount == 0:
+            raise Exception("No start date for pid {} found!".format(pid))
+        date_start = self.doFetchAll()[0][0].strftime("%Y-%m-%d")
+
+        self.doExec("SELECT MAX(date_end) FROM revisions_view "
+                    "WHERE projectId={}".format(pid))
+        if self.cur.rowcount == 0:
+            raise Exception("No end date for pid {} found!".format(pid))
+        date_end = self.doFetchAll()[0][0].strftime("%Y-%m-%d")
+
+        return (date_start, date_end)
+
+    def get_commit_cdate(self, pid, hash):
+        """Given a project ID and a commit hash, obtain the commit date
+           in format YYYY-MM-DD"""
+        self.doExec("SELECT commitDate FROM commit "
+                    "WHERE projectId={} and commitHash='{}'".format(pid, hash))
+        if self.cur.rowcount == 0:
+            raise Exception("No date found for commit {} (pid {}) found!".format(hash, pid))
+        date = self.doFetchAll()[0][0].strftime("%Y-%m-%d")
+
+        return (date)
 
     def get_release_range(self, project_id, range_id):
         self.doExec(
@@ -213,8 +270,14 @@ class DBManager:
             raise Exception("Range id {} not found!".format(project_id))
         return ranges[0]
 
+    def get_num_commits_in_range(self, range_id):
+        self.doExec("SELECT COUNT(*) FROM commit WHERE releaseRangeId={}".format(range_id))
+        if self.cur.rowcount == 0:
+            raise Exception("Range id {} not found in get_num_commits_in_range!".format(range_id))
+        return self.doFetchAll()[0][0]
+
     def update_release_timeline(self, project, tagging, revs, rcs,
-            recreate_project=False):
+                                recreate_project=False):
         '''
         For a project, update the release timeline table with the given
         revisions. If existing releases/rcs from the timeline are not in
@@ -235,7 +298,7 @@ class DBManager:
             tags = [tag for (tag,) in self.doFetchAll()]
             if len(set(tags)) != len(tags):
                 log.error("Database corrupted: Duplicate release entries in "
-                        "release_timeline! Recreating project.")
+                          "release_timeline! Recreating project.")
                 recreate_project = True
             if len(tags) == 0:
                 recreate_project = True
@@ -268,14 +331,14 @@ class DBManager:
         # of a previous period
         if not recreate_project:
             for i, tag in enumerate(rctags):
-                if i+1 >= len(rcs):
+                if i + 1 >= len(rcs):
                     log.warning("List of release candidates to analyse "
                                 "was shortened.")
                     break
-                if rcs[i+1] != tag:
+                if rcs[i + 1] != tag:
                     log.error("Release candidate number {} changed tag "
                               "from {} to {}. Recreating project.".
-                              format(i, tag, rcs[i+1]))
+                              format(i, tag, rcs[i + 1]))
                     recreate_project = True
                     break
 
@@ -289,25 +352,25 @@ class DBManager:
                 "WHERE release_range.projectId=%s ORDER BY release_range.id",
                 (pid,))
             ranges = self.doFetchAll()
-            if len(set(ranges)) != len(tags)-1:
+            if len(set(ranges)) != len(tags) - 1:
                 log.error("Database corrupted: Number of release ranges"
                           " does not match number of release tags!")
                 recreate_project = True
 
             for i, (start, end, rc) in enumerate(self.doFetchAll()):
-                if i+1 >= len(revs) or recreate_project:
+                if i + 1 >= len(revs) or recreate_project:
                     # List of revisions to analyse was shortened
                     break
-                if (start, end) != (revs[i], revs[i+1]):
+                if (start, end) != (revs[i], revs[i + 1]):
                     log.error("Release range {} changed from {} to {}."
                               " Recreating project.".
-                              format(i, (start, end), (revs[i], revs[i+1])))
+                              format(i, (start, end), (revs[i], revs[i + 1])))
                     recreate_project = True
                     break
-                if rc != rcs[i+1]:
+                if rc != rcs[i + 1]:
                     log.error("Release candidate {} changed from {} to {}."
                               " Recreating project.".
-                              format(i, rc, rcs[i+1]))
+                              format(i, rc, rcs[i + 1]))
                     recreate_project = True
                     break
 
@@ -316,7 +379,7 @@ class DBManager:
             # This should ripple through the database and delete
             # all referencing entries for project
             log.warning("Deleting and re-creating project {}/{}.".
-                    format(project, tagging))
+                        format(project, tagging))
             self.doExecCommit("DELETE FROM `project` WHERE id=%s", (pid,))
             pid = self.getProjectID(project, tagging)
             tags = []
@@ -333,15 +396,15 @@ class DBManager:
                 previous_rev = tags[-1]
             for rev, rc in list(zip(revs, rcs))[len(tags):]:
                 self.doExecCommit("INSERT INTO release_timeline "
-                                    "(type, tag, projectId) "
-                                    "VALUES (%s, %s, %s)",
-                                    ("release", rev, pid))
+                                  "(type, tag, projectId) "
+                                  "VALUES (%s, %s, %s)",
+                                  ("release", rev, pid))
 
                 if previous_rev is not None and rc:
                     self.doExecCommit("INSERT INTO release_timeline "
-                                        "(type, tag, projectId) "
-                                        "VALUES (%s, %s, %s)",
-                                        ("rc", rc, pid))
+                                      "(type, tag, projectId) "
+                                      "VALUES (%s, %s, %s)",
+                                      ("rc", rc, pid))
 
                 if previous_rev is not None:
                     startID = self.getRevisionID(pid, previous_rev)
@@ -351,17 +414,18 @@ class DBManager:
                     else:
                         rcID = "NULL"
                     self.doExecCommit("INSERT INTO release_range "
-                                        "(releaseStartId, releaseEndId, "
-                                        "projectId, releaseRCStartId) "
-                                        "VALUES (%s, %s, %s, %s)",
-                                        (startID, endID, pid, rcID))
+                                      "(releaseStartId, releaseEndId, "
+                                      "projectId, releaseRCStartId) "
+                                      "VALUES (%s, %s, %s, %s)",
+                                      (startID, endID, pid, rcID))
                     new_ranges_to_process.append(self.getReleaseRangeID(pid,
-                            (startID, endID)))
+                                                                        (startID, endID)))
                 previous_rev = rev
         # now we are in a well-defined state.
         # Return the ids of the release ranges we have to process
         return new_ranges_to_process
 
+
 def tstamp_to_sql(tstamp):
     """Convert a Unix timestamp into an SQL compatible DateTime string"""
-    return(datetime.utcfromtimestamp(tstamp).strftime("%Y-%m-%d %H:%M:%S"))
+    return (datetime.utcfromtimestamp(tstamp).strftime("%Y-%m-%d %H:%M:%S"))

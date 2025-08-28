@@ -70,7 +70,7 @@ class TestLogger(unittest.TestCase):
 
     def testLogfile(self):
         '''Test logging into a logfile'''
-        f = NamedTemporaryFile(mode="w",delete=False)
+        f = NamedTemporaryFile(delete=False)
         filename = f.name
         try:
             set_log_level('error') # avoid using the console logger

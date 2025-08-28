@@ -100,7 +100,7 @@ construct.twomode.graph <- function(edgelist, adjmat.twomode, threshold, con,
 
   ## Construct an igraph object with the essential pieces of information
   ## (the other covariates can be restored from this basis)
-  g <- graph_from_adjacency_matrix(adjmat.twomode, mode="undirected", weighted=TRUE)
+  g <- graph.adjacency(adjmat.twomode, mode="undirected", weighted=TRUE)
   V(g)$degree <- deg
   V(g)$type <- "keyword"
   V(g)$type[people] <- "person"
@@ -156,10 +156,13 @@ gen.net <- function(type, termfreq, data.path, max.terms) {
   }
 
   res <- centrality.edgelist(termfreq, type, data.path, max.terms)
-  adj.matrix <- adjacency(res$edgelist, mode="addvalues", directed=FALSE)
-
-#  print(ggplot(data.frame(x=res[[2]]), aes(x=x)) + geom_histogram(binwidth=1))
-  return(list(edgelist=res$edgelist, adj.matrix=adj.matrix))
+  if (!is.null(res$edgelist)) {
+      adj.matrix <- adjacency(res$edgelist, mode="addvalues", directed=FALSE)
+      return(list(edgelist=res$edgelist, adj.matrix=adj.matrix))
+  } else {
+      logwarn(paste("Edgelist for ", type, " network is empty!", sep=""))
+      return(NULL)
+  }
 }
 
 ## When a mail without properly specified author is encountered, the
@@ -168,7 +171,7 @@ gen.net <- function(type, termfreq, data.path, max.terms) {
 fixup.network <- function(.net) {
   idx <- !is.na(colnames(.net))
 
-  return(.net[idx, idx])
+  return(.net[idx, idx, drop=FALSE])
 }
 
 ## Author name normalisation. Replace the name/email pairs found in
@@ -192,16 +195,19 @@ do.normalise <- function(conf, authors) {
 gen.networks.df <- function(networks) {
   ## For each centrality measure, compute a mapping from centrality to
   ## correlation: Given a desired centrality c, select only the adjacency
-  ## matrix entrie that exceed c from the interest and communication
+  ## matrix entries that exceed c from the interest and communication
   ## networks. Then, re-arrange the numbers into a vector and compute the
   ## correlation between the vectors. If the correlation is large, then the
-  ## same authors appear in both facedes of the networks
+  ## same authors appear in both facets of the networks
   interest.net <- networks$interest
   communication.net <- networks$communication
   centrality.list <- networks$centrality
   ret <- NULL
 
   for (cty.idx in seq_along(centrality.list)) {
+    if (is.nan(max(centrality.list[[cty.idx]]))) {
+        next
+    }
     centrality.values <- seq(0, max(centrality.list[[cty.idx]]), length.out=100)
 
     ## NOTE: The paper by Bohn et al. uses correlation as distance measure;
@@ -282,11 +288,13 @@ gen.combined.network <- function(interest.network, commnet) {
   ## TODO: In general, the complete approach to network selection seems clumsy
   ## and should be refactored.
   network.red <- commnet[is.element(rownames(commnet), rownames(interestnet)),
-                         is.element(rownames(commnet), rownames(interestnet))]
+                         is.element(rownames(commnet), rownames(interestnet)),
+                         drop=FALSE]
 
   ## Same operation with the roles of both networks reversed
   interestnet <- interestnet[is.element(rownames(interestnet), rownames(commnet)),
-                             is.element(rownames(interestnet), rownames(commnet))]
+                             is.element(rownames(interestnet), rownames(commnet)),
+                             drop=FALSE]
 
   ## Permute the communication network such that the order
   ## of elements is identical to the interest network
@@ -294,7 +302,7 @@ gen.combined.network <- function(interest.network, commnet) {
 
   ## TODO: Why are different packages used to compute the graph measures?
   ## They should all be supported by SNA
-  network.red.ig <- graph_from_adjacency_matrix(network.red, mode="directed")
+  network.red.ig <- graph.adjacency(network.red, mode="directed")
   deg <- sna::degree(network.red, cmode="freeman", gmode="graph", ignore.eval=TRUE)
   betw <- igraph::betweenness(network.red.ig, directed=FALSE)
   clo <- igraph::closeness(network.red.ig)
@@ -339,7 +347,7 @@ compute.initiate.respond <- function(forest, network.red, cty.list) {
 
   ## TODO: Why does snatm want to construct an outlier here?!
 ##  cent[dim(cent)[1],] <- c(max(cent[,1])+40, max(cent[,2])+100, 0)
-  cent$deg <- normalize(cent$deg)
+  cent$deg <- snatm::normalize(cent$deg)
   cent$col[cent$deg > DEG.THRESHOLD] <- "High deg"
 
   return(cent)
@@ -420,7 +428,7 @@ gen.agg.smooth.ts <- function(ts, smooth) {
 
 ## Given the result from query.mlid.map, convert local mail thread IDs
 ## to in-db global IDs
-ml.thread.loc.to.glob <- function(ml.id.map, loc.id) {
+ml.thread.loc.to.glob <- function(ml.id.map, loc.id, all.ids=FALSE) {
   global.id <- ml.id.map[ml.id.map$local.id==loc.id,]$db.id
 
   ## gmane.org, for instance, sometimes provides multiple copies
@@ -428,7 +436,9 @@ ml.thread.loc.to.glob <- function(ml.id.map, loc.id) {
   ## in a separate clean-up step; here, just show a warning
   if (length(global.id) > 1) {
     logwarn(str_c("Multiple global IDs for local mail ID ", loc.id, "!"))
-    global.id <- global.id[1]
+    if (!all.ids) {
+        global.id <- global.id[1]
+    }
   }
 
   return(global.id)
@@ -444,4 +454,27 @@ fix.name <- function(name) {
     }
 
     return (name)
+}
+
+## Convert a list of datetime stamps extracted from a mail corpus into
+## a vector of strings. Take into account that some messages do not
+## have correct dates set.
+mail.dates.to.vector <- function(dates) {
+    if(class(dates) != "list") {
+        stop("Internal error: mail.dates.to.vector requires a list as input")
+    }
+
+    ## Note: length(.) returns 1 if the string is non-empty, and 0
+    ## if the string is character(0), which is the case when the date time
+    ## stamp is not present
+    dates <- lapply(dates, as.character)
+    names(dates) <- NULL # Simplify diagnostic output; we don't need names here.
+    idx.nodate <- which(sapply(dates, length)==0)
+
+    ## NOTE: We should use NA here, but the DB scheme
+    ## does not support this yet. Use a known invalid,
+    ## but formally correct date.
+    dates[idx.nodate] <- "1970-01-01 00:00:00"
+
+    return(unlist(dates))
 }

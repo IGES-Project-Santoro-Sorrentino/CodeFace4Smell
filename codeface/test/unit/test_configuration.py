@@ -34,8 +34,9 @@ class TestConfiguration(unittest.TestCase):
 
     def testLoad(self):
         '''Test that an example configuration is loaded correctly'''
-        global_conf = NamedTemporaryFile(mode="w",delete=False)
-        global_conf.write("""# Foo commentary! A:B
+        global_conf = NamedTemporaryFile(delete=False)
+        global_conf.write("""
+# Foo commentary! A:B
 ---
 # Fake Database access information
 dbhost: remotehost
@@ -45,18 +46,20 @@ dbname: 'thedb'
 # intermediate comment
 idServicePort: 4242
 idServiceHostname: foohost
-""")
+        """)
         global_conf.close()
-        project_conf = NamedTemporaryFile(mode="w",delete=False)
-        project_conf.write("""# Fake commentary!
+        project_conf = NamedTemporaryFile(delete=False)
+        project_conf.write("""
+# Fake commentary!
+
 ---
 project: theproject
 repo: therepo # Relative to git-dir as specified on the command line
 description: the description
 ml: the mailing list
 revisions: [ "v1", "v2", "v3",
-        "v4",
-        "v5"]
+            "v4",
+            "v5"]
 rcs : ["v1rc0", "v2rc0", "v3rc0", "v4rc0",
 "v5rc0"
 ]
@@ -82,7 +85,7 @@ tagging: tag
         os.unlink(global_conf.name)
         os.unlink(project_conf.name)
         # Check that the configuration is valid YAML
-        yaml_conf = NamedTemporaryFile(mode="w",delete=False)
+        yaml_conf = NamedTemporaryFile(delete=False)
         yaml_conf.write(str(c))
         yaml_conf.close()
         c2 = Configuration.load(yaml_conf.name)
@@ -101,8 +104,9 @@ tagging: tag
 
     def testFail(self):
         '''Test the failure modes of configuration'''
-        global_conf = NamedTemporaryFile(mode="w",delete=False)
-        global_conf.write("""# Foo commentary! A:B
+        global_conf = NamedTemporaryFile(delete=False)
+        global_conf.write("""
+# Foo commentary! A:B
 ---
 # Fake Database access information
 dbhost: remotehost
@@ -112,10 +116,12 @@ dbname: thedb
 # intermediate comment
 idServicePort: 4242
 idServiceHostname: foohost
-""")
+        """)
         global_conf.close()
-        project_conf_1 = NamedTemporaryFile(mode="w",delete=False)
-        project_conf_1.write("""# Fake commentary!
+        project_conf_1 = NamedTemporaryFile(delete=False)
+        project_conf_1.write("""
+# Fake commentary!
+
 ---
 project: theproject
 Parse error! ""
@@ -123,22 +129,24 @@ Parse error! ""
         project_conf_1.close()
 
         # project conf wirh wrong number of rcs tags
-        project_conf_2 = NamedTemporaryFile(mode="w",delete=False)
-        project_conf_2.write("""# Fake commentary!
+        project_conf_2 = NamedTemporaryFile(delete=False)
+        project_conf_2.write("""
+# Fake commentary!
+
 ---
 project: theproject
 repo: therepo # Relative to git-dir as specified on the command line
 description: the description
 ml: the mailing list
 revisions: [ "v1", "v2", "v3",
-        "v4",
-        "v5"]
-                rcs : ["v1rc0", "v3rc0", "v4rc0",
+            "v4",
+            "v5"]
+rcs : ["v1rc0", "v3rc0", "v4rc0",
 
-                "v5rc0"
-                ]
-                tagging: tag
-                """)
+"v5rc0"
+]
+tagging: tag
+""")
         project_conf_2.close()
 
         self.assertRaises(IOError, Configuration.load,

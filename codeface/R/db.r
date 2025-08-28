@@ -22,6 +22,11 @@
 suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(lubridate))
+
+# Enable local infile for MySQL connections
+options(mysql.connection.timeout = 0)
+options(mysql.connection.auto.reconnect = TRUE)
+
 source("boundaries.r")
 
 sq <- function(string) {
@@ -137,6 +142,19 @@ get.revision.id <- function(conf, tag) {
   return(res$id)
 }
 
+gen.revision.id <- function(conf, tag, date) {
+  ## add new revision
+  dat <- data.frame(type='release', tag=tag, date=date, projectId=conf$pid)
+  dbWriteTable(conf$con, "release_timeline", dat, row.names=FALSE, append=TRUE)
+
+  ## get ID of the newly added revision
+  res <- dbGetQuery(conf$con, str_c("SELECT id FROM release_timeline ",
+                               "WHERE projectId=", sq(conf$pid),
+                               " AND tag=", sq(tag),
+                               " AND type='release'"))
+  return(res$id)
+}
+
 get.range.id <- function(conf, tag.start, tag.end) {
   start.id <- get.revision.id(conf, tag.start)
   end.id <- get.revision.id(conf, tag.end)
@@ -146,6 +164,20 @@ get.range.id <- function(conf, tag.start, tag.end) {
                           conf$pid, " AND releaseStartId=", start.id,
                           " AND releaseEndId=", end.id))
   return(res$id[1])
+}
+
+gen.range.id <- function(conf, start, end, rc = NA) {
+  ## add new release range
+  dat <- data.frame(releaseStartId=start, releaseEndId=end,
+                    projectId=conf$pid, releaseRCStartId=rc)
+  dbWriteTable(conf$con, "release_range", dat, row.names=FALSE, append=TRUE)
+
+  ## get ID of the newly added release
+  res <- dbGetQuery(conf$con, str_c("SELECT id FROM release_range ",
+                               "WHERE projectId=", sq(conf$pid),
+                               " AND releaseStartId=", sq(start),
+                               " AND releaseEndId=", sq(end)))
+  return(res$id)
 }
 
 # Get release and release candidate dates for a given project
@@ -278,10 +310,14 @@ init.db <- function(conf) {
   drv <- dbDriver("MySQL")
   con <- dbConnect(drv, host=conf$dbhost, user=conf$dbuser,
                    password=conf$dbpwd, dbname=conf$dbname,
-                   port=conf$dbport)
+                   port=conf$dbport, CLIENT_LOCAL_FILES=TRUE,
+                   default.file=NULL, group=NULL)
   conf$pid <- get.project.id(con, conf$project)
   conf$con <- con
   dbGetQuery(con, "SET NAMES utf8")
+  
+  # Enable local infile for this session
+  dbGetQuery(con, "SET GLOBAL local_infile = 1")
 
   if (is.null(conf$pid)) {
     stop("Internal error: No ID assigned to project ", conf$project, "\n",
@@ -304,9 +340,18 @@ init.db.global <- function(conf) {
   drv <- dbDriver("MySQL")
   con <- dbConnect(drv, host=conf$dbhost, user=conf$dbuser,
                    password=conf$dbpwd, dbname=conf$dbname,
-                   port=conf$dbport)
+                   port=conf$dbport, CLIENT_LOCAL_FILES=TRUE,
+                   default.file=NULL, group=NULL)
   conf$con <- con
   dbGetQuery(con, "SET NAMES utf8")
+  
+  # Enable local infile for this session
+  dbGetQuery(con, "SET GLOBAL local_infile = 1")
+
+  ## Set Session wait_timeout variable to 24 hours, default is 8
+  query <- str_c("SET SESSION wait_timeout=", 24*60*60)
+  dbGetQuery(con, query)
+
   return(conf)
 }
 
@@ -339,7 +384,7 @@ get.graph.data.local <- function(con, p.id, range.id, cluster.method=NULL) {
     rank=NULL
   }
   else {
-    ## get graph communities 
+    ## get graph communities
     local.comm <- get.communities.local(con, p.id, range.id, id.map,
                                         cluster.method)
   }
@@ -363,7 +408,7 @@ get.communities.local <- function(con, p.id, range.id, id.map, cluster.method){
                            prank=TRUE, technique=0))
   ## get the cluster members
   cluster.mem <- lapply(cluster.data, function(cluster) cluster$personId)
-  ## reconstruct igraph style communities object 
+  ## reconstruct igraph style communities object
   comm <- clusters.2.communities(cluster.mem, cluster.method, id.map)
 
   ## rank
@@ -397,7 +442,7 @@ get.index.map <- function(ids) {
 ## Remap all ids in the given a mapping
 ## Args:
 ##  ids: id index vector (non-consecutive)
-##  map: environment (hash table) mapping global index to consecutive local 
+##  map: environment (hash table) mapping global index to consecutive local
 ##       index
 ## Returns:
 ##  edgelist: edge list with remapped node index
@@ -415,7 +460,7 @@ map.ids <- function(ids, map){
 ## Create communities object from clusters list
 ## Args:
 ##  clusters: list of global personId vectors mapping people to clusters
-##  map: environment (hash table) to map non-consecutive global index to 
+##  map: environment (hash table) to map non-consecutive global index to
 ##       consecutive local index
 ## Returns:
 ##  comm: igraph-like communities object; NULL if there are no communities

@@ -41,15 +41,10 @@ from datetime import timedelta, datetime
 BatchJobTuple = namedtuple('BatchJobTuple', ['id', 'func', 'args', 'kwargs',
         'deps', 'startmsg', 'endmsg'])
 class BatchJob(BatchJobTuple):
-    '''def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(BatchJob, self).__init__(*args, **kwargs)
         self.done = False
-        self.submitted = False'''
-    def __new__(cls, *args, **kwargs):
-        instance = super(BatchJob, cls).__new__(cls, *args, **kwargs)
-        instance.done = False
-        instance.submitted = False
-        return instance
+        self.submitted = False
 
 class BatchJobPool(object):
     '''
@@ -117,7 +112,7 @@ class BatchJobPool(object):
             return None
         job_id = self.next_id
         self.next_id += 1
-        j = BatchJob(id=job_id, func=func, deps=deps, args=args, kwargs=kwargs, startmsg=startmsg, endmsg=endmsg)
+        j = BatchJob(job_id, func, args, kwargs, deps, startmsg, endmsg)
         self.jobs[job_id] = j
         return job_id
 
@@ -245,18 +240,16 @@ signal.signal(signal.SIGTERM, handle_sigterm)
 # Also dump on sigusr1, but do not terminate
 signal.signal(signal.SIGUSR1, handle_sigusr1)
 
-def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
+def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None, silent_errors=False):
     '''
     Execute the command `cmd` specified as a list of ['program', 'arg', ...]
-    If ignore_errors is true, a non-zero exit code will be ignored, otherwise
-    an exception is raised.
-    If direct_io is True, do not capture the stdin and stdout of the command
+    If ignore_errors is true, a non-zero exit code will be ignored (and a warning
+    messages will be issued), otherwise an exception is raised. If silent_errors is True,
+    no messages will be emitted even in case of an error (but exceptions will still be raised).
+    If direct_io is True, do not capture the stdin and stdout of the command.
     Returns the stdout of the command.
     '''
-    jcmd = " ".join(
-        x.decode('utf-8') if isinstance(x, bytes) else str(x)
-        for x in cmd
-    )
+    jcmd = " ".join(cmd)
     log.debug("Running command: {}".format(jcmd))
     try:
         if direct_io:
@@ -270,26 +263,39 @@ def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
 
     if pipe.returncode != 0:
         if ignore_errors:
-            log.warning("Command '{}' failed with exit code {}. Ignored.".
-                    format(jcmd, pipe.returncode))
+            if not(silent_errors):
+                log.warning("Command '{}' failed with exit code {}. Ignored.".
+                            format(jcmd, pipe.returncode))
         else:
-            if not direct_io and stdout is not None and stderr is not None:
+            if not(direct_io) and not(silent_errors):
                 log.info("Command '{}' stdout:".format(jcmd))
-                for line in stdout.splitlines():
-                    log.info(line)
+                if stdout is not None:
+                    for line in stdout.splitlines():
+                        log.info(line)
                 log.info("Command '{}' stderr:".format(jcmd))
-                for line in stderr.splitlines():
-                    log.info(line)
-            
-            if direct_io:
-                msg = "Command '{}' failed with exit code {}.".format(jcmd, pipe.returncode)
-            else:
-                msg = "Command '{}' failed with exit code {}. \n" \
-                      "(stdout: {}\nstderr: {})"\
-                      .format(jcmd, pipe.returncode, stdout, stderr)
-            log.error(msg)
+                if stderr is not None:
+                    for line in stderr.splitlines():
+                        log.info(line)
+            msg = "Command '{}' failed with exit code {}. \n" \
+                  "(stdout: {}\nstderr: {})"\
+                  .format(jcmd, pipe.returncode, stdout, stderr)
+            if not(silent_errors):
+                log.error(msg)
             raise Exception(msg)
-    return stdout if not direct_io else None
+    
+    if direct_io:
+        return ""
+    if stdout is not None:
+        try:
+            return stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            # Handle non-UTF-8 characters in git output
+            try:
+                return stdout.decode("utf-8", errors="replace")
+            except:
+                # Fallback: decode as latin-1 and replace problematic characters
+                return stdout.decode("latin-1", errors="replace")
+    return ""
 
 def _convert_dot_file(dotfile):
     '''
@@ -337,7 +343,7 @@ def layout_graph(filename):
     cmd.append("-Gcharset=utf-8")
     cmd.append("-o{0}.pdf".format(os.path.splitext(filename)[0]))
     cmd.append(out.name)
-    execute_command(cmd)
+    execute_command(cmd, ignore_errors=True)
     # Manually remove the temporary file
     os.unlink(out.name)
 
@@ -351,10 +357,7 @@ def generate_report(start_rev, end_rev, resdir):
     cmd.append(resdir)
     cmd.append("{0}--{1}".format(start_rev, end_rev))
     with open(os.path.join(resdir, report_base + ".tex"), 'w') as f:
-        output = execute_command(cmd)
-        if isinstance(output, bytes):
-            output = output.decode('utf-8')
-        f.write(output)
+        f.write(execute_command(cmd))
 
     # Compile report with lualatex
     cmd = []
@@ -377,34 +380,10 @@ def generate_report(start_rev, end_rev, resdir):
 
     os.chdir(orig_wd)
     shutil.rmtree(tmpdir)
-    
-def generate_report_st(stdir):
-    log.info("  -> Generating report")
-    # We run latex in a temporary directory so that it's easy to
-    # get rid of the log files etc. created during the run that are
-    # not relevant for the final result
-    orig_wd = os.getcwd()
-    tmpdir = mkdtemp()
-    os.chdir(tmpdir)
-    
-    # Compile reports with lualatex
-    cmd = []
-    cmd.append("lualatex")
-    cmd.append("-interaction=nonstopmode")
-    cmd.append(os.path.join(stdir, "report.tex"))
-    execute_command(cmd, ignore_errors=True)
-    try:
-        shutil.copy("report.pdf", stdir)
-    except IOError:
-        log.warning("Could not copy report PDF (missing input data?)")
-
-    os.chdir(orig_wd)
-    shutil.rmtree(tmpdir)
 
 def generate_reports(start_rev, end_rev, range_resdir):
     files = glob(os.path.join(range_resdir, "*.dot"))
-    log.info("  -> Analysing revision range {0}..{1}: Generating Reports...".
-        format(start_rev, end_rev))
+    log.info("  -> Generating Reports...")
     for file in files:
         layout_graph(file)
     generate_report(start_rev, end_rev, range_resdir)
@@ -417,11 +396,11 @@ def check4ctags():
 
     res = execute_command(cmd, None)
 
-    if not(res.decode().startswith(prog_name)):
+    if not(res.startswith(prog_name)):
         log.error("program '{0}' does not exist".format(prog_name))
         raise Exception("ctags-exuberant not found")
 
-    if not(res.decode().startswith(prog_version)):
+    if not(res.startswith(prog_version)):
         # TODO: change this to use standard mechanism for error logging
         log.error("Ctags version '{0}' not found".format(prog_version))
         raise Exception("Incompatible ctags-exuberant version")
@@ -433,10 +412,10 @@ def check4cppstats():
     """
     # We can not check the version directly as there is no version switch
     # on cppstats We just check if the first line is OK.
-    line = "cppstats v0.8.4"
+    line = "cppstats v0.9."
     cmd = "/usr/bin/env cppstats --version".split()
     res = execute_command(cmd)
-    if not (res.decode().startswith(line)):
+    if not (res.startswith(line)):
         error_message = "expected the first line to start with '{0}' but "\
                         "got '{1}'".format(line, res[0])
         log.error("program cppstats does not exist, or it is not working "
@@ -445,15 +424,32 @@ def check4cppstats():
         raise Exception("no working cppstats found ({0})"
                         .format(error_message))
 
+
+def gen_prefix(i, num_ranges, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # When revisions are given by commit hashes, shorten them since
+        # they don't carry any meaning
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return("  -> Revision range {0}/{1} ({2}..{3}): ".format(i, num_ranges,
+                                                             start_rev, end_rev))
+
+def gen_range_path(base_path, i, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # Same logic as above, but construct a file system path
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return(os.path.join(base_path, "{0}--{1}-{2}".
+                        format(str(i).zfill(3), start_rev, end_rev)))
+
+
 def parse_iso_git_date(date_string):
-    # Ensure input is a string, not bytes
-    if isinstance(date_string, bytes):
-        date_string = date_string.decode('utf-8')
     # from http://stackoverflow.com/questions/526406/python-time-to-age-part-2-timezones
     try:
         offset = int(date_string[-5:])
-    except Exception:
-        log.error('could not extract timezone info from "{0}"'.format(date_string))
+    except:
+        log.error("could not extract timezone info from \"{0}\""
+                  .format(date_string))
         raise
     minutes = (offset if offset > 0 else -offset) % 100
     delta = timedelta(hours=offset / 100,
@@ -466,8 +462,20 @@ def parse_iso_git_date(date_string):
     parsed_date -= delta
     return parsed_date
 
+# Determine settings for the size and amount of analysis windows. If nothing
+# specific is provided, use default settings
+def get_analysis_windows(conf):
+    window_size_months = 3
+    num_window = -1
 
-def generate_analysis_windows(repo, window_size_months, num_windows=None):
+    if "windowSize" in conf.keys():
+        window_size_months = conf["windowSize"]
+    if "numWindows" in conf.keys():
+        num_window = conf["numWindows"]
+
+    return window_size_months, num_window
+
+def generate_analysis_windows(repo, window_size_months):
     """
     Generates a list of revisions (commit hash) in increments of the window_size
     parameter. The window_size parameter specifies the number of months between
@@ -489,7 +497,7 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs = []
     start = window_size_months  # Window size time ago
     end = 0  # Present time
-    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct'\
+    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct,%ci'\
         .format(repo).split()
     cmd_base_max1 = cmd_base + ['--max-count=1']
     cmd = cmd_base_max1 + [get_before_arg(end)]
@@ -497,11 +505,6 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs.extend(rev_end)
 
     while start != end:
-        if (not (num_windows is None)):
-            if num_windows==0:
-                break
-            num_windows = num_windows - 1
-        
         cmd = cmd_base_max1 + [get_before_arg(start)]
         rev_start = execute_command(cmd).splitlines()
 
@@ -527,9 +530,12 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     if int(revs[0][1]) > int(revs[1][1]):
       del revs[0]
 
-    # Extract hash
-    revs = [rev[0] for rev in revs]
+    # Extract hash values and dates intro seperate lists
+    revs_hash = [rev[0] for rev in revs]
+    revs_date = [rev[2].split(" ")[0] for rev in revs]
 
+    # We cannot detect release canndidate tags in this analysis mode,
+    # so provide a list with None entries
     rcs = [None for x in range(len(revs))]
 
-    return revs, rcs
+    return revs_hash, rcs, revs_date
