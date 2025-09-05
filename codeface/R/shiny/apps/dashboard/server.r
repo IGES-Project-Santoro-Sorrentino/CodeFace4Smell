@@ -1,6 +1,6 @@
 ## This file is part of Codeface. Codeface is free software: you can
 ## redistribute it and/or modify it under the terms of the GNU General Public
-## License as published by the Free Software Foundation, version 2.
+## License as published by the GNU Free Software Foundation, version 2.
 ##
 ## This program is distributed in the hope that it will be useful, but WITHOUT
 ## ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -17,6 +17,15 @@
 ##
 ## Software Project dashboard (server.r)
 ##
+
+## Load dashboard configuration with fallbacks
+if (file.exists('../../dashboard.config.r')) {
+  cat('Loading dashboard configuration...\n')
+  source('../../dashboard.config.r')
+  cat('Dashboard configuration loaded successfully!\n')
+} else {
+  cat('Warning: dashboard.config.r not found\n')
+}
 
 ## generate a unique name to be added to list
 ## template used is: "prefix<integer>"
