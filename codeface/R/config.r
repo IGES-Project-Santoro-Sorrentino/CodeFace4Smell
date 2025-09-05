@@ -21,6 +21,7 @@ suppressPackageStartupMessages(library(logging))
 basicConfig()
 
 source("db.r")
+source("utils.r")
 
 logdebug.config <- function(conf) {
   ## Log the contents of a conf object to the debug stream
@@ -110,6 +111,30 @@ load.config <- function(global.file, project.file=NULL) {
     stop("Malformed configuration: Revision and rcs lists must have same length!")
   }
 
+  if (!is.null(conf$artifactType)) {
+      ensure.supported.artifact.type(conf$artifactType)
+  } else {
+      conf$artifactType <- "file"
+  }
+
+  if (!is.null(conf$dependencyType)) {
+      ensure.supported.dependency.type(conf$dependencyType)
+  } else {
+      conf$dependencyType <- "none"
+  }
+
+  if (!is.null(conf$qualityType)) {
+      ensure.supported.quality.type(conf$qualityType)
+  } else {
+      conf$qualityType <- "corrective"
+  }
+
+  if (!is.null(conf$communicationType)) {
+      ensure.supported.communication.type(conf$communicationType)
+  } else {
+      conf$communicationType <- "mail"
+  }
+
   return(conf)
 }
 
@@ -136,7 +161,9 @@ config.from.args <- function(positional.args=list(), extra.args=list(),
     make_option(c("-j", "--jobs"), type="integer", default=1,
                 help="Number of parallel jobs for analysis"),
     make_option("--profile", help="Measure and store profiling data",
-                action="store_true", default=FALSE)
+                action="store_true", default=FALSE),
+    make_option("--use-corpus", help="Re-use the corpus file that have been generated before",
+                dest="use_corpus", action="store_true", default=FALSE)
   ), extra.args)
 
   ## Note that positional_arguments=TRUE even if no positional arguments are
@@ -178,6 +205,7 @@ config.from.args <- function(positional.args=list(), extra.args=list(),
   ## Store other options that need to be propagated upwards
   conf$profile <- opts$profile
   conf$jobs <- opts$jobs
+  conf$use_corpus <- opts$use_corpus
 
   logdebug.config(conf)
   return(conf)

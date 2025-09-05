@@ -19,7 +19,7 @@ import sys
 from subprocess import check_call
 from tempfile import NamedTemporaryFile
 from textwrap import dedent
-from os.path import dirname, join as pathjoin
+from os.path import dirname, abspath, join as pathjoin
 from pkg_resources import load_entry_point
 
 from codeface.logger import set_log_level, start_logfile, log
@@ -27,6 +27,7 @@ from .example_projects import example_project_func
 from codeface.project import project_analyse, mailinglist_analyse
 from codeface.configuration import Configuration
 from codeface.dbmanager import DBManager
+from codeface.project import project_analyse
 
 pid_tables = [
     "cluster",
@@ -50,27 +51,23 @@ ignore_tables = [
     "per_cluster_statistics",
     "thread_density",
     "url_info",
-    "cc_list",
+    "watcher_list",
     "commit_communication",
     "commit_dependency",
-    "issue_comment",
-    "issue_dependencies",
-    "issue_duplicates",
-    "issue_history",
+    "issue_relations",
+    "issue_change",
     "plot_bin",
 ]
 
 other_tables = [
     "author_commit_stats",
-    "cc_list",
+    "watcher_list",
     "cluster_user_mapping",
     "commit_communication",
     "edgelist",
     #"initiate_response",
-    "issue_comment",
-    "issue_dependencies",
-    "issue_duplicates",
-    "issue_history",
+    "issue_relations",
+    "issue_change",
     "pagerank",
     "pagerank_matrix",
     "plot_bin",

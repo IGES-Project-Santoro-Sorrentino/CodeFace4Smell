@@ -21,8 +21,8 @@ Encapsulates a configuration as an immutable dict
 
 import yaml
 from shutil import copyfile
-from collections import Mapping
-from logging import getLogger;
+from collections.abc import Mapping
+from logging import getLogger
 from codeface.linktype import LinkType
 
 log = getLogger(__name__)
@@ -44,7 +44,10 @@ class Configuration(Mapping):
     OPTIONAL_KEYS = ('description', 'ml', 'mailinglists', 'sleepTime',
                      'proxyHost', 'proxyPort', 'bugsProjectName',
                      'productAsProject', 'issueTrackerType',
-                     'issueTrackerURL', 'understand', 'sloccount')
+                     'issueTrackerURL', 'issueTrackerProject',
+                     'issueTrackerUser', 'issueTrackerPassword',
+                     'understand', 'sloccount', 'windowSize', 'numWindows',
+                     'qualityType', 'communicationType', 'artifactType', 'dependencyType')
     ALL_KEYS = set(GLOBAL_KEYS + GLOBAL_OPTIONAL_KEYS + PROJECT_KEYS +
                    OPTIONAL_KEYS)
 
@@ -57,7 +60,6 @@ class Configuration(Mapping):
                 'idServicePort' : 8080
                 }
         self._conf_file_loc = None
-        self._conf_file_substitute = False
 
     @classmethod
     def load(self, global_conffile, local_conffile=None):
@@ -67,7 +69,6 @@ class Configuration(Mapping):
         c = Configuration()
         log.devinfo("Loading global configuration file '{}'".
                 format(global_conffile))
-        self._local_conf_name = local_conffile
         self._global_conf = c._load(global_conffile)
         c._conf.update(c._global_conf)
         if local_conffile:
@@ -134,15 +135,9 @@ class Configuration(Mapping):
         if not self['tagging'] in LinkType.get_all_link_types():
             log.critical('Unsupported tagging mechanism specified!')
             raise ConfigurationError('Unsupported tagging mechanism.')
-        
-        if self["revisions"] == "3months":
-            self._conf_file_substitute = True
-            log.info("3 months ranges specified in configuration, analyzing history "
-                     "in 3 month increments for at most 3 years")
 
         if len(self["revisions"]) < 2:
-            log.info("No revision range specified in configuration, analyzing history "
-                     "in 3 month increments")
+            log.info("No revision range specified in configuration, using auto-generated windows")
 
         if len(self["revisions"]) != len(self["rcs"]):
             log.critical("Malformed configuration: revision and rcs list "
@@ -153,29 +148,16 @@ class Configuration(Mapping):
         unknown_keys = [k for k in self if k not in self.ALL_KEYS]
         for key in unknown_keys:
             log.warning("Unknown key '{}' in configuration.".format(key))
-            
-    def _substitute(self):
-        f = open(self._local_conf_name,'r')
-        filedata = f.read()
-        f.close()
-        filedata = filedata.replace('3months', str(self["revisions"]))
-        tmp_file = NamedTemporaryFile(mode='w', prefix=self._conf['project'],
-                                     delete=False)
-        tmp_file.write(filedata)
-        tmp_file.close()
-        copyfile(tmp_file.name, self._local_conf_name)
 
     def write(self):
-        conf_file = NamedTemporaryFile(mode='w', prefix=self._conf['project'],
+      conf_file = NamedTemporaryFile(mode='w', prefix=self._conf['project'],
                                      delete=False)
-        yaml.dump(self._conf, conf_file)
-        self._conf_file_loc = conf_file.name
-        conf_file.close()
-        if (self._conf_file_substitute):
-            self._substitute()
+      yaml.dump(self._conf, conf_file)
+      self._conf_file_loc = conf_file.name
+      conf_file.close()
 
     def get_conf_file_loc(self):
-        return self._conf_file_loc
+      return self._conf_file_loc
 
     # Function for the Configuration object to function as a dict
     def __getitem__(self, key):

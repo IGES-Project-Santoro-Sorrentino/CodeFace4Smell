@@ -415,7 +415,7 @@ save.graph.graphviz <- function(con, pid, range.id, cluster.method, filename,
     return(NULL)
   }
   node.rank <- node.rank[V(g)$Id]
-  V(g)$name <- 1:vcount(g)
+  V(g)$name <- as.character(1:vcount(g))
   cluster.conductance <- community.metric(g, comm, "conductance")
   g.min      <- min.edge.count(g, comm, node.rank)
   g.min.simp <- simplify(g.min, remove.multiple=TRUE,remove.loops=TRUE)

@@ -21,8 +21,6 @@ from random import random
 from codeface.util import BatchJobPool
 from os import unlink
 
-TMPFILE="_codeface_test_tmpfile"
-
 def test_function(i):
     sleep(0.05*random())
     log.info(i)
@@ -43,7 +41,8 @@ def ioerror_function():
 def unpickleable_error_function():
     class MyEx(Exception):
         def __init__(self):
-            self.handle = open(TMPFILE, "wb")
+            print("HALLO")
+            self.handle = NamedTemporaryFile(delete=True)
     raise MyEx()
 
 class Testpool(unittest.TestCase):
@@ -111,4 +110,3 @@ class Testpool(unittest.TestCase):
             self.assertIn("MyEx", str(e))
             raised = True
         self.assertEqual(raised, True)
-        unlink(TMPFILE)

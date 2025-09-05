@@ -1,5 +1,22 @@
 #! /usr/bin/env python
 
+# This file is part of Codeface. Codeface is free software: you can
+# redistribute it and/or modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation, version 2.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Copyright 2014, Siemens AG, Mitchell Joblin <mitchell.joblin.ext@siemens.com>
+# Copyright 2017, Wolfgang Mauerer <wm@linux-kernel.net>
+# All Rights Reserved.
+
 import xml.etree.ElementTree as ET
 from subprocess import Popen, PIPE
 from os import path
@@ -22,14 +39,14 @@ class FileAnalysis:
         output_dir = 'OUTPUT_DIRECTORY=' + self.outdir
         cmd_1 = ['cat', self.conf]
         p1 = Popen(cmd_1 ,stdout=PIPE)
-        doxy_conf = p1.communicate()[0]
+        doxy_conf = p1.communicate()[0].decode('utf-8')
         doxy_conf = doxy_conf + input_file + '\n'
         doxy_conf = doxy_conf + output_dir
 
         cmd = 'doxygen -'
         cmd_2 = cmd.split()
         p2 = Popen(cmd_2, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        p2.stdin.write(doxy_conf)
+        p2.stdin.write(doxy_conf.encode('utf-8'))
         p2.communicate()
 
     def _parse_XML_index(self):

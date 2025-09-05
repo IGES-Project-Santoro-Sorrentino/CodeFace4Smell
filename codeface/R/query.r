@@ -22,7 +22,6 @@ suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(plyr))
 suppressPackageStartupMessages(library(logging))
-suppressPackageStartupMessages(library(lubridate))
 
 ## Obtain the series.merged object constructed in do.ts.analysis
 query.series.merged <- function(conf, subset=NULL) {
@@ -63,6 +62,11 @@ query.sloccount.ts <- function(con, plot.id) {
                  "WHERE plotId=", plot.id)
 
   dat <- dbGetQuery(con, query)
+  if (nrow(dat) == 0) {
+      logwarn(str_c("query.sloccount.ts returned empty result set for plot id ", plot.id),
+              logger="query")
+      return(NULL)
+  }
   colnames(dat) <-  c("time", "person.months", "total.cost", "schedule.months",
                       "avg.devel")
   dat$time <- ymd_hms(dat$time, quiet=TRUE)
@@ -87,6 +91,12 @@ query.project.name <- function(con, pid) {
   dat <- dbGetQuery(con, str_c("SELECT name FROM project WHERE id=", sq(pid)))
 
   return(dat$name)
+}
+
+query.project.analysis.method <- function(con, pid) {
+  dat <- dbGetQuery(con, str_c("SELECT analysisMethod FROM project WHERE id=", sq(pid)))
+
+  return(dat$analysisMethod)
 }
 
 query.projects <- function(con, analysis.method=NULL) {
@@ -149,52 +159,6 @@ get.cycles <- function(conf, ...) {
   return(get.cycles.con(conf$con, conf$pid, ...))
 }
 
-## Obtain name from person Id
-get.person.name <- function(con, person.id) {
-  dat <- dbGetQuery(con, str_c("SELECT Name ",
-                               "FROM person ",
-                               "WHERE ID=", person.id))
-  dat$Name <- as.character(dat$Name)
-  Encoding(dat$Name) <- "UTF-8"
-  
-  return(dat[1,])
-}
-
-## Compute if a developer is (potentially) sponsored or not.
-## reference: Paid vs. Volunteer Work in Open Source by D. Riehle
-## Input: conf, developer id, start.date, end.date
-## Output: True (aka sponsored) if more than 95% of his commits
-##         are executed in Mon-Fri 8/6pm
-is.person.sponsored.in.range <- function(conf, person.id, start.date, end.date){
-  date <- dbGetQuery(conf$con,str_c("SELECT commitDate FROM commit WHERE commitDate BETWEEN ", sq(start.date), 
-      " AND ", sq(end.date), " AND projectId=", conf$pid, " AND author = ", person.id))
-  free.time <- 0
-  paid.time <- 0
-  for (com in unlist(date)) {
-    wd <- wday(as.Date(strsplit(com,' ')[[1]][1]))
-    if(is.nan(wd)){
-      next()
-    }
-    if ((wd == 1) | (wd == 7)){
-      free.time <- free.time + 1
-    } else {
-      hr <- hour(com)
-      if (hr > 8 & hr < 18){
-        paid.time <- paid.time + 1
-      } else {
-        free.time <- free.time + 1
-      }
-    }
-  }
-  
-  ## if 95% of its commit are executed in working time, he is considered sponsored
-  res <- paid.time/(free.time+paid.time)
-  if (!is.nan(res) & res > 0.95){
-    return(1)
-  } 
-  return(0)
-}
-
 ## Obtain the per-release-range statistics
 get.range.stats <- function(con, range.id) {
   dat <- dbGetQuery(con, str_c("SELECT ID, Name, added, deleted, total, ",
@@ -229,16 +193,22 @@ get.commits.by.ranges <- function(conf, subset=NULL, FUN=NULL) {
 }
 
 get.commits.by.date.con <- function(con, pid, start.date, end.date,
-                                    commit.date=TRUE, commit.count=FALSE) {
+                                    commit.date=TRUE, count.type="none") {
   if (commit.date==TRUE) {
     date.type <- "commitDate"
   } else {
     date.type <- "authorDate"
   }
 
-  if (commit.count==TRUE) {
+  if (count.type=="commit") {
     query <- "SELECT author, COUNT(*) as freq"
     group.by <- " GROUP BY author"
+  } else if (count.type=="loc") {
+    query <- "SELECT author, SUM(DiffSize) as freq"
+    group.by <- " GROUP BY author"
+  } else if (count.type!="none") {
+    logerror("Incorrect count.type parameter")
+    stop()
   } else {
     query <- "SELECT *"
     group.by <- NULL
@@ -290,6 +260,12 @@ get.commit.hashes.by.range.con <- function(con, pid, range.id) {
 
 get.commit.hashes.by.range <- function(conf, range.id) {
   return(get.commit.hashes.by.range.con(conf$con, conf$pid, range.id))
+}
+
+get.commit.message <- function(conf, cmt.hash) {
+  dat <- dbGetQuery(conf$con, str_c("SELECT description FROM commit ",
+                               "WHERE commitHash='", cmt.hash, "'", sep=""))
+  return(dat$description)
 }
 
 ## Get scaled commit infos for all cycles of pid
@@ -604,6 +580,21 @@ query.mail.edgelist <- function(con, pid, start.date, end.date) {
   return(dat)
 }
 
+## Compute the number messages each author generated across all mailing lists
+## for a single project
+query.author.mail.count <- function(con, pid, start.date, end.date) {
+  query <- str_c("SELECT author, COUNT(*) as freq",
+                 "FROM mail",
+                 "WHERE projectId=", pid,
+                 "AND creationDate >=", sq(start.date),
+                 "AND creationDate <", sq(end.date),
+                 "GROUP BY author", sep=" ")
+
+  dat <- dbGetQuery(con, query)
+
+  return(dat)
+}
+
 ## Distributions for commit statistics
 query.contributions.stats.range <- function(con, range.id, include.id=FALSE) {
   if (include.id) {
@@ -641,9 +632,10 @@ query.contributions.stats.project <- function(con, pid) {
 }
 
 ## Obtain a mapping between local and in-DB mail IDs
-query.mlid.map <- function(con, ml.id) {
+query.mlid.map <- function(con, ml.id, range.id) {
   dat <- dbGetQuery(con, str_c("SELECT id, mailThreadId FROM ",
-                               "mail_thread WHERE mlId=", ml.id))
+                               "mail_thread WHERE mlId=", ml.id,
+                               " AND releaseRangeId=", range.id))
 
   if (!is.null(dat)) {
     colnames(dat) <- c("db.id", "local.id")

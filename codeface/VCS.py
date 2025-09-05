@@ -35,6 +35,7 @@
 # TODO: Unify range handling. Either a range is always a list, or always
 # represented by two parameters.
 import itertools
+import json
 import readline
 
 from . import commit
@@ -42,12 +43,12 @@ from . import fileCommit
 import re
 import os
 import bisect
+# import pyctags as ctags
 import tempfile
 from . import sourceAnalysis
 import shutil
-from codeface.fileCommit import FileDict
+from .fileCommit import FileDict
 from progressbar import ProgressBar, Percentage, Bar, ETA
-from ctags import CTags, TagEntry
 from logging import getLogger
 from codeface.linktype import LinkType
 
@@ -444,8 +445,20 @@ def get_feature_lines(parsed_lines, filename):
             # otherwise, add empty list
             fexpr_lines.add_line(line, [])
 
+    # Replace an empty list of features or an empty feature expression with
+    # the 'Base_Feature' constant
+    feature_lines_with_base = FileDict()
+    for line_nr in feature_lines:
+        features = feature_lines.get_line_info_raw(line_nr)
+        feature_lines_with_base.add_line(line_nr, features if bool(features) else ['Base_Feature'])
+
+    fexpr_lines_with_base = FileDict()
+    for line_nr in fexpr_lines:
+        fexpr = fexpr_lines.get_line_info_raw(line_nr)
+        fexpr_lines_with_base.add_line(line_nr, fexpr if bool(fexpr) else ['Base_Feature'])
+
     # return feature lines and feature-expression lines
-    return (feature_lines, fexpr_lines)
+    return (feature_lines_with_base, fexpr_lines_with_base)
 
 
 def get_feature_lines_from_file(file_layout_src, filename):
@@ -501,7 +514,7 @@ def get_feature_lines_from_file(file_layout_src, filename):
         srcFile.close()
         featurefile.close()
         os.remove(srcFile.name)
-    except (Exception, IOError):
+    except (Exception, IOError) as e:
         import sys
         error_type, error_value, traceback = sys.exc_info()
         log.warning("IGNORING cppstats failure ({0}, {1}), "
@@ -1193,6 +1206,9 @@ class gitVCS (VCS):
                 cmd.append("--")
                 cmd.append(file_commit.filename)
                 rev = execute_command(cmd).strip()
+
+                if rev=="":
+                  rev = self.rev_end
             else:
                 #Use revision that represents the final commit for the specified
                 #revision range
@@ -1311,8 +1327,14 @@ class gitVCS (VCS):
         try:
             file_analysis.run_analysis()
         except Exception as e:
-            log.critical("doxygen analysis error{0} - defaulting to Ctags".format(e))
+            log.warning("doxygen analysis error '{0}' - returning empty result".format(e))
             return {}, []
+
+        # Doxygen results:
+        # src_elem_list: List of hash tables with bodystart, bodyend, name, mem_kind
+        # comp_kind, comp_name (latter two: ??? refers to some compound)
+        # func_lines: list of hashes line_num: artefact name for _every_ line that
+        # covers an artefact (not just ranges)
 
         # Delete tmp directory storing doxygen files
         shutil.rmtree(tmp_outdir)
@@ -1328,6 +1350,22 @@ class gitVCS (VCS):
             func_lines.update(f_lines)
 
         return func_lines, file_analysis.src_elem_list
+
+    def _parseSrcFileDB(self, src_file):
+        log.debug("Running DB analysis")
+
+        res = DBAnalysis(src_file)
+        # Get src element bounds
+        func_lines = {}
+        for elem in res:
+            # Source indices in DB analysis start at 1, convert to zero based values
+            start = int(elem['start']) - 1
+            end = int(elem['end']) - 1
+            name = elem['name']
+            f_lines = {line_num:name  for line_num in range(start, end+1)}
+            func_lines.update(f_lines)
+
+        return func_lines
 
     def _parseSrcFileCtags(self, src_file):
         # temporary file where we write transient data needed for ctags
@@ -1420,11 +1458,15 @@ class gitVCS (VCS):
                         '.cpp', '.cxx', '.c', '.cc']):
             func_lines, src_elems = self._parseSrcFileDoxygen(srcFile.name)
             file_commit.setSrcElems(src_elems)
-            file_commit.doxygen_analysis = True
+            file_commit.artefact_line_range = True
+        elif (fileExt in ['sql']):
+            # TODO: Should we use more file extensions?
+            func_lines = self._parseSrcFileDB(srcFile.name)
+            file_commit.artefact_line_range = True
 
         if not func_lines: # for everything else use Ctags
             func_lines = self._parseSrcFileCtags(srcFile.name)
-            file_commit.doxygen_analysis = False
+            file_commit.artefact_line_range = False
 
         # clean up src temp file
         srcFile.close()
@@ -1433,10 +1475,8 @@ class gitVCS (VCS):
         file_commit.setFunctionLines(func_lines)
 
         # save the implementation for each function
-        rmv_char = '[.{}();:\[\]]'
         for line_num, src_line in enumerate(file_layout_src):
-            src_line_rmv = re.sub(rmv_char, ' ', src_line.strip())
-            file_commit.addFuncImplLine(line_num, src_line_rmv)
+            file_commit.addFuncImplLine(line_num, src_line)
 
 
     def cmtHash2CmtObj(self, cmtHash):
@@ -1464,14 +1504,10 @@ class gitVCS (VCS):
 
         #query git to get all committers to a particular file
         #includes commit hash, author and committer data and time
-        cmtList = None
-        try:
-            logMsg = self._getFileCommitInfo(fname, rev_start, rev_end)
-            #store the commit hash to the fileCommitList
-            cmtList = map(self._Logstring2Commit, logMsg)
-        except:
-            log.info("=> Codeface is not able to analyse this. Skipping..")
-        
+        logMsg = self._getFileCommitInfo(fname, rev_start, rev_end)
+
+        #store the commit hash to the fileCommitList
+        cmtList = map(self._Logstring2Commit, logMsg)
 
         return cmtList
 
@@ -1498,9 +1534,9 @@ class gitVCS (VCS):
 
         #filter results to only get implementation files
         fileExt = (".c", ".cc", ".cpp", ".cxx", ".cs", ".asmx", ".m", ".mm",
-                   ".js", ".java", ".j", ".jav", ".php",".py", ".sh", ".rb",
+                   ".js", ".coffee", ".java", ".j", ".jav", ".php",".py", ".sh", ".rb",
                    '.d', '.php4', '.php5', '.inc', '.phtml', '.m', '.mm',
-                   '.f', '.for', '.f90', '.idl', '.ddl', '.odl', '.tcl')
+                   '.f', '.for', '.f90', '.idl', '.ddl', '.odl', '.tcl', 'sql')
 
         fileNames = [fileName for fileName in all_files if
                      fileName.lower().endswith(fileExt)]

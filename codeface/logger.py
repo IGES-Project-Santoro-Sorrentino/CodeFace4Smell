@@ -26,6 +26,7 @@ instead of the current handcoded configuration.
 '''
 import logging
 import os
+import io
 import multiprocessing
 from copy import copy
 
@@ -45,7 +46,7 @@ def start_logfile(filename, level_string):
     Start logging to the file specified by *filename* using the log level
     specified in *level_string*.
     '''
-    logfile_handler = _get_log_handler(file(filename, 'w'))
+    logfile_handler = _get_log_handler(open(filename, 'w'))
     logfile_handler.setLevel(_loglevel_from_string(level_string))
     log.devinfo("Opened logfile '{}' with log level '{}'"
             "".format(filename, level_string))

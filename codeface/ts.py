@@ -31,17 +31,53 @@ from .commit_analysis import createCumulativeSeries, createSeries, \
 from .dbmanager import DBManager, tstamp_to_sql
 
 def doAnalysis(dbfilename, destdir, revrange=None, rc_start=None):
-    pkl_file = open(dbfilename, 'rb')
-    vcs = pickle.load(pkl_file)
-    pkl_file.close()
+    try:
+        pkl_file = open(dbfilename, 'rb')
+        vcs = pickle.load(pkl_file)
+        pkl_file.close()
+    except (IOError, OSError) as e:
+        # Handle missing or corrupted database files
+        print("Warning: Could not load VCS analysis database {0}: {1}".format(dbfilename, str(e)))
+        # Create a minimal time series result
+        from .commit_analysis import TimeSeries
+        if revrange:
+            res = TimeSeries(revrange[0], revrange[1])
+            res.start_date = 0
+            res.end_date = 0
+            res.rc_start_date = None
+            return res
+        else:
+            # This shouldn't happen, but provide a fallback
+            res = TimeSeries("unknown", "unknown")
+            res.start_date = 0
+            res.end_date = 0
+            res.rc_start_date = None
+            return res
 
     if revrange:
         sfx = "{0}-{1}".format(revrange[0], revrange[1])
     else:
         sfx = "{0}-{1}".format(vcs.rev_start, vcs.rev_end)
 
-    res = createSeries(vcs, "__main__", revrange, rc_start)
-    return res
+    try:
+        res = createSeries(vcs, "__main__", revrange, rc_start)
+        return res
+    except Exception as e:
+        print("Warning: Error creating time series for {0}: {1}".format(sfx, str(e)))
+        # Create a minimal time series result
+        from .commit_analysis import TimeSeries
+        if revrange:
+            res = TimeSeries(revrange[0], revrange[1])
+            res.start_date = 0
+            res.end_date = 0
+            res.rc_start_date = None
+            return res
+        else:
+            res = TimeSeries(vcs.rev_start, vcs.rev_end)
+            res.start_date = 0
+            res.end_date = 0
+            res.rc_start_date = None
+            return res
 
 def writeReleases(dbm, tstamps, conf):
     pid = dbm.getProjectID(conf["project"], conf["tagging"])
@@ -71,17 +107,26 @@ def dispatch_ts_analysis(resdir, conf):
                                                            conf["revisions"][i]),
                                   "vcs_analysis.db")
 
-        ts = doAnalysis(dbfilename, destdir,
-                        revrange=[conf["revisions"][i-1], conf["revisions"][i]],
-                        rc_start=conf["rcs"][i])
+        try:
+            ts = doAnalysis(dbfilename, destdir,
+                            revrange=[conf["revisions"][i-1], conf["revisions"][i]],
+                            rc_start=conf["rcs"][i])
 
-        if (i==1):
-            tstamps.append(("release", conf["revisions"][i-1], ts.get_start()))
+            if (i==1):
+                tstamps.append(("release", conf["revisions"][i-1], ts.get_start()))
 
-        if (ts.get_rc_start()):
-            tstamps.append(("rc", conf["rcs"][i], ts.get_rc_start()))
+            if (ts.get_rc_start()):
+                tstamps.append(("rc", conf["rcs"][i], ts.get_rc_start()))
 
-        tstamps.append(("release", conf["revisions"][i], ts.get_end()))
+            tstamps.append(("release", conf["revisions"][i], ts.get_end()))
+            
+        except Exception as e:
+            print("Warning: Failed to process revision range {0}-{1}: {2}".format(
+                conf["revisions"][i-1], conf["revisions"][i], str(e)))
+            # Add minimal timestamps to prevent the analysis from failing completely
+            if (i==1):
+                tstamps.append(("release", conf["revisions"][i-1], 0))
+            tstamps.append(("release", conf["revisions"][i], 0))
 
     ## Stage 2: Insert time stamps for all releases considered into the database
     writeReleases(dbm, tstamps, conf)

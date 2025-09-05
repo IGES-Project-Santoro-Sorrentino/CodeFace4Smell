@@ -1,14 +1,33 @@
-# install_cran_packages.R
-options(repos = c(CRAN = "https://packagemanager.posit.co/cran/2018-01-04"))
+# install_base_packages.R
 
-install.packages(c(
-  "statnet", "ggplot2", "tm", "optparse", "igraph", "zoo", "xts",
-  "lubridate", "xtable", "reshape", "wordnet", "stringr", "yaml", "plyr",
-  "scales", "gridExtra", "RMySQL", "RCurl", "mgcv", "shiny", "dtw", "httpuv",
-  "corrgram", "logging", "png", "rjson", "lsa", "RJSONIO", "devtools"
-), dependencies = c("Depends", "Imports"))
+options(repos = c(CRAN = "https://cran.r-project.org"), dependencies = TRUE)
 
+packages <- c(
+  "ggplot2", "tm", "optparse", "zoo", "xts",
+  "lubridate", "xtable", "reshape", "stringr", "yaml", "plyr",
+  "scales", "gridExtra", "RMySQL", "RJSONIO", "RCurl", "mgcv", "shiny",
+  "dtw", "httpuv", "png", "rjson", "lsa", "testthat", "arules", "data.table",
+  "ineq", "igraph", "wordnet", "logging", "statnet", "corrgram", "markovchain", "psych"
+)
 
-library(devtools)
+not_installed_packages <- c()
+for (pkg in packages) {
+  if (!pkg %in% rownames(installed.packages())) {
+    not_installed_packages <- c(not_installed_packages, pkg)
+  }
+}
 
-message("✔ CRAN packages installed")
+install.packages(not_installed_packages)
+
+not_installed <- packages[!not_installed_packages %in% rownames(installed.packages())]
+
+if (length(not_installed) > 0) {
+  stop(
+    sprintf(
+      "❌ I seguenti pacchetti NON sono stati installati correttamente: %s",
+      paste(not_installed, collapse = ", ")
+    )
+  )
+}
+
+message("✔ Base packages installed")

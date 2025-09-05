@@ -43,6 +43,17 @@ scale.data <- function(dat, .min=0, .max=1) {
   return(dat)
 }
 
+## Given two lists from and to, create an interleaved list.
+## interleave.lists(c(1,2,3), c(4,5,6)), for instance, delivers
+## c(1,4,2,5,3,6).
+do.interleave <- function(from, to) {
+    if (length(from) != length(to)) {
+        logwarn(paste("Warning: Length of lists to be interleaved differ,",
+                      "recycling will happen.", logger="utils"))
+    }
+    return(c(rbind(from, to)))
+}
+
 ## Given an igraph edge list (data frame with columns toId and fromId), create
 ## a weighted edge list, where the weight is the number of parallel edges.
 gen.weighted.edgelist <- function(edges) {
@@ -100,3 +111,66 @@ select.graphics.dev <- function(filename, size, format="png") {
   return(dev)
 }
 
+
+get.num.cores <- function() {
+  n.cores <- detectCores(logical=TRUE)
+  if (is.na(n.cores)) n.cores <- 2
+
+  return(n.cores)
+}
+
+
+perform.git.checkout <- function(repodir, commit.hash, code.dir, archive.file) {
+  args <- str_c(" --git-dir=", repodir, " archive -o ", archive.file,
+                " --format=tar --prefix='code/' ", commit.hash)
+  do.system("git", args)
+
+  args <- str_c("-C ", code.dir, " -xf ", archive.file)
+  do.system("tar", args)
+}
+
+## Return the content of a file at a given revision
+show.git.file <- function(repodir, commit.hash, file) {
+  args <- str_c(" --git-dir=", repodir, " show ", commit.hash, ":", file, sep="")
+  return(do.system("git", args))
+}
+
+## Some helper functions to ensure that functions (and the
+## configuration parser) receive correct parameter values in the
+## conway analysis
+ensure.supported.artifact.type <- function(artifact.type) {
+    if(!(artifact.type %in% c("function", "file", "feature"))) {
+        stop(str_c("Internal error: Artifact type ", artifact.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.dependency.type <- function(dependency.type) {
+    if(!(dependency.type %in% c("co-change", "dsm", "feature_call", "semantic", "none"))) {
+        stop(str_c("Internal error: Dependency type ", dependency.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.quality.type <- function(quality.type) {
+    if(!(quality.type %in% c("corrective", "defect"))) {
+        stop(str_c("Internal error: Quality type ", quality.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.communication.type <- function(communication.type) {
+    if(!(communication.type %in% c("mail", "jira", "mail+jira"))) {
+        stop(str_c("Internal error: Communication type ", communication.type,
+                   " is unsupported!"))
+    }
+}
+
+## Generate a directory name as basis for range-specific output files
+## Form: 001--abcdef-7fbd3d, i.e., the range id filled to three positions,
+## and the first 6 characters of start and end revision.
+gen.range.path <- function(i, cycle) {
+    revs <- strsplit(cycle, "-")[[1]]
+    return(str_c(str_pad(i, width=3, side="left", pad="0"), "--",
+                 substr(revs[1], 0, 6), "-", substr(revs[2], 0, 6), sep=""))
+}

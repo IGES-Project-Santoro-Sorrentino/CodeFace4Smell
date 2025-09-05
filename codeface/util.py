@@ -240,12 +240,13 @@ signal.signal(signal.SIGTERM, handle_sigterm)
 # Also dump on sigusr1, but do not terminate
 signal.signal(signal.SIGUSR1, handle_sigusr1)
 
-def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
+def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None, silent_errors=False):
     '''
     Execute the command `cmd` specified as a list of ['program', 'arg', ...]
-    If ignore_errors is true, a non-zero exit code will be ignored, otherwise
-    an exception is raised.
-    If direct_io is True, do not capture the stdin and stdout of the command
+    If ignore_errors is true, a non-zero exit code will be ignored (and a warning
+    messages will be issued), otherwise an exception is raised. If silent_errors is True,
+    no messages will be emitted even in case of an error (but exceptions will still be raised).
+    If direct_io is True, do not capture the stdin and stdout of the command.
     Returns the stdout of the command.
     '''
     jcmd = " ".join(cmd)
@@ -262,22 +263,39 @@ def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
 
     if pipe.returncode != 0:
         if ignore_errors:
-            log.warning("Command '{}' failed with exit code {}. Ignored.".
-                    format(jcmd, pipe.returncode))
+            if not(silent_errors):
+                log.warning("Command '{}' failed with exit code {}. Ignored.".
+                            format(jcmd, pipe.returncode))
         else:
-            if not direct_io:
+            if not(direct_io) and not(silent_errors):
                 log.info("Command '{}' stdout:".format(jcmd))
-                for line in stdout.splitlines():
-                    log.info(line)
+                if stdout is not None:
+                    for line in stdout.splitlines():
+                        log.info(line)
                 log.info("Command '{}' stderr:".format(jcmd))
-                for line in stderr.splitlines():
-                    log.info(line)
+                if stderr is not None:
+                    for line in stderr.splitlines():
+                        log.info(line)
             msg = "Command '{}' failed with exit code {}. \n" \
                   "(stdout: {}\nstderr: {})"\
                   .format(jcmd, pipe.returncode, stdout, stderr)
-            log.error(msg)
+            if not(silent_errors):
+                log.error(msg)
             raise Exception(msg)
-    return stdout
+    
+    if direct_io:
+        return ""
+    if stdout is not None:
+        try:
+            return stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            # Handle non-UTF-8 characters in git output
+            try:
+                return stdout.decode("utf-8", errors="replace")
+            except:
+                # Fallback: decode as latin-1 and replace problematic characters
+                return stdout.decode("latin-1", errors="replace")
+    return ""
 
 def _convert_dot_file(dotfile):
     '''
@@ -325,7 +343,7 @@ def layout_graph(filename):
     cmd.append("-Gcharset=utf-8")
     cmd.append("-o{0}.pdf".format(os.path.splitext(filename)[0]))
     cmd.append(out.name)
-    execute_command(cmd)
+    execute_command(cmd, ignore_errors=True)
     # Manually remove the temporary file
     os.unlink(out.name)
 
@@ -362,34 +380,10 @@ def generate_report(start_rev, end_rev, resdir):
 
     os.chdir(orig_wd)
     shutil.rmtree(tmpdir)
-    
-def generate_report_st(stdir):
-    log.info("  -> Generating report")
-    # We run latex in a temporary directory so that it's easy to
-    # get rid of the log files etc. created during the run that are
-    # not relevant for the final result
-    orig_wd = os.getcwd()
-    tmpdir = mkdtemp()
-    os.chdir(tmpdir)
-    
-    # Compile reports with lualatex
-    cmd = []
-    cmd.append("lualatex")
-    cmd.append("-interaction=nonstopmode")
-    cmd.append(os.path.join(stdir, "report.tex"))
-    execute_command(cmd, ignore_errors=True)
-    try:
-        shutil.copy("report.pdf", stdir)
-    except IOError:
-        log.warning("Could not copy report PDF (missing input data?)")
-
-    os.chdir(orig_wd)
-    shutil.rmtree(tmpdir)
 
 def generate_reports(start_rev, end_rev, range_resdir):
     files = glob(os.path.join(range_resdir, "*.dot"))
-    log.info("  -> Analysing revision range {0}..{1}: Generating Reports...".
-        format(start_rev, end_rev))
+    log.info("  -> Generating Reports...")
     for file in files:
         layout_graph(file)
     generate_report(start_rev, end_rev, range_resdir)
@@ -418,7 +412,7 @@ def check4cppstats():
     """
     # We can not check the version directly as there is no version switch
     # on cppstats We just check if the first line is OK.
-    line = "cppstats v0.8.4"
+    line = "cppstats v0.9."
     cmd = "/usr/bin/env cppstats --version".split()
     res = execute_command(cmd)
     if not (res.startswith(line)):
@@ -429,6 +423,24 @@ def check4cppstats():
                   .format(error_message))
         raise Exception("no working cppstats found ({0})"
                         .format(error_message))
+
+
+def gen_prefix(i, num_ranges, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # When revisions are given by commit hashes, shorten them since
+        # they don't carry any meaning
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return("  -> Revision range {0}/{1} ({2}..{3}): ".format(i, num_ranges,
+                                                             start_rev, end_rev))
+
+def gen_range_path(base_path, i, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # Same logic as above, but construct a file system path
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return(os.path.join(base_path, "{0}--{1}-{2}".
+                        format(str(i).zfill(3), start_rev, end_rev)))
 
 
 def parse_iso_git_date(date_string):
@@ -450,8 +462,20 @@ def parse_iso_git_date(date_string):
     parsed_date -= delta
     return parsed_date
 
+# Determine settings for the size and amount of analysis windows. If nothing
+# specific is provided, use default settings
+def get_analysis_windows(conf):
+    window_size_months = 3
+    num_window = -1
 
-def generate_analysis_windows(repo, window_size_months, num_windows=None):
+    if "windowSize" in conf.keys():
+        window_size_months = conf["windowSize"]
+    if "numWindows" in conf.keys():
+        num_window = conf["numWindows"]
+
+    return window_size_months, num_window
+
+def generate_analysis_windows(repo, window_size_months):
     """
     Generates a list of revisions (commit hash) in increments of the window_size
     parameter. The window_size parameter specifies the number of months between
@@ -473,7 +497,7 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs = []
     start = window_size_months  # Window size time ago
     end = 0  # Present time
-    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct'\
+    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct,%ci'\
         .format(repo).split()
     cmd_base_max1 = cmd_base + ['--max-count=1']
     cmd = cmd_base_max1 + [get_before_arg(end)]
@@ -481,11 +505,6 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs.extend(rev_end)
 
     while start != end:
-        if (not (num_windows is None)):
-            if num_windows==0:
-                break
-            num_windows = num_windows - 1
-        
         cmd = cmd_base_max1 + [get_before_arg(start)]
         rev_start = execute_command(cmd).splitlines()
 
@@ -511,9 +530,12 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     if int(revs[0][1]) > int(revs[1][1]):
       del revs[0]
 
-    # Extract hash
-    revs = [rev[0] for rev in revs]
+    # Extract hash values and dates intro seperate lists
+    revs_hash = [rev[0] for rev in revs]
+    revs_date = [rev[2].split(" ")[0] for rev in revs]
 
+    # We cannot detect release canndidate tags in this analysis mode,
+    # so provide a list with None entries
     rcs = [None for x in range(len(revs))]
 
-    return revs, rcs
+    return revs_hash, rcs, revs_date

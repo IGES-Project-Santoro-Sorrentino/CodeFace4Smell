@@ -25,6 +25,7 @@ from datetime import datetime
 from time import strptime
 from random import Random
 import re
+import yaml
 
 _Author = namedtuple("_Author", ["name", "email"])
 class Author(_Author):

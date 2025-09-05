@@ -15,7 +15,6 @@
 # All Rights Reserved.
 
 from . import codeLine
-
 class codeBlock:
     '''
     A code block is a contiguous set of lines of code from a single
