@@ -13,6 +13,9 @@
 #
 # Copyright 2013 by Siemens AG, Johannes Ebke <johannes.ebke.ext@siemens.com>
 
+## Load required libraries
+library(htmltools)
+
 ## Here follow lists of Unicode symbols which are useful as status indicators
 ##
 ## Weather-type indicators, in order of severity
@@ -22,10 +25,8 @@
 make.symbol <- function(unicode.hex) {
   # Convert hex to actual Unicode character
   unicode.char <- intToUtf8(unicode.hex)
-  div(style="font-family: symbola; display: inline; font-weight: 500;", 
-      unicode.char)
-  ## Uncomment this to make the example html file
-  #intToUtf8(unicode.hex)
+  # Return just the unicode character for now
+  unicode.char
 }
 
 symbol.weather.sunny <- make.symbol(0x1f323)

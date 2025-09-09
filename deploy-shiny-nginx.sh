@@ -13,6 +13,7 @@ echo "Using existing CodeFace dashboard from codeface/R/shiny/apps/dashboard/"
 # Configuration
 SHINY_PORT=8082  # Changed from 8081 to avoid conflict with nginx
 DETAILS_PORT=8083  # Port for details app
+PLOTS_PORT=8084  # Port for plots app
 SHINY_APPS_DIR="/codeface/shiny-apps"
 NGINX_CONF="/etc/nginx/sites-available/shiny"
 NGINX_ENABLED="/etc/nginx/sites-enabled/shiny"
@@ -50,6 +51,23 @@ safe_install('plotly')
 safe_install('RMySQL')
 safe_install('logging')
 safe_install('jsonlite')
+
+# Install devtools for GitHub packages
+safe_install('devtools')
+
+# Install shinyGridster from GitHub
+if (!require(shinyGridster, character.only = TRUE, quietly = TRUE)) {
+  cat('Installing shinyGridster from GitHub...\n')
+  tryCatch({
+    devtools::install_github('wch/shiny-gridster', quiet = TRUE)
+    cat('✓ Successfully installed shinyGridster from GitHub\n')
+  }, error = function(e) {
+    cat('⚠ Warning: Failed to install shinyGridster from GitHub:', e$message, '\n')
+    cat('  The dashboard may have limited functionality without this package\n')
+  })
+} else {
+  cat('✓ shinyGridster package already installed\n')
+}
 EOF
 
 # Run the R script
@@ -60,10 +78,46 @@ else
 fi
 rm -f /tmp/install_packages.R
 
-echo -e "${GREEN}Step 2: Creating Shiny apps directory...${NC}"
+echo -e "${GREEN}Step 2: Setting up configuration file...${NC}"
+# Ensure the configuration file exists
+if [ ! -f "/codeface/conf/codeface.conf" ]; then
+    echo -e "${YELLOW}Configuration file not found, creating default...${NC}"
+    mkdir -p /codeface/conf
+    cat > /codeface/conf/codeface.conf << 'EOF'
+# Global configuration file for the codeface framework -*- yaml -*-
+# Copyright Siemens AG 2013, Wolfgang Mauerer
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without any warranty.
+
+---
+# Database access information
+dbhost: localhost
+dbuser: codeface
+dbpwd: codeface
+dbname: codeface
+
+# PersonService Settings
+idServicePort: 8080
+idServiceHostname: localhost
+
+# Java BugExtractor Settings
+sleepTime: 1000
+# Specify proxyHost when no direct http connections are possible
+#proxyHost: proxy.host.tld
+proxyPort: 83
+EOF
+    echo -e "${GREEN}✓ Configuration file created at /codeface/conf/codeface.conf${NC}"
+else
+    echo -e "${GREEN}✓ Configuration file already exists at /codeface/conf/codeface.conf${NC}"
+fi
+
+echo -e "${GREEN}Step 3: Creating Shiny apps directory...${NC}"
 mkdir -p "$SHINY_APPS_DIR"
 
-echo -e "${GREEN}Step 3: Using existing CodeFace dashboard...${NC}"
+echo -e "${GREEN}Step 4: Using existing CodeFace dashboard...${NC}"
 # The project already has a complete dashboard at codeface/R/shiny/apps/dashboard/
 # We'll use that instead of creating a new one
 
@@ -161,7 +215,7 @@ fi
 # Create a symlink to the dashboard
 ln -sf "$EXISTING_DASHBOARD" "$SHINY_APPS_DIR/codeface-dashboard"
 
-echo -e "${GREEN}Step 4: Creating startup script for dashboard...${NC}"
+echo -e "${GREEN}Step 5: Creating startup script for dashboard...${NC}"
 cat > "$SHINY_APPS_DIR/start-dashboard.sh" << EOF
 #!/bin/bash
 cd "$EXISTING_DASHBOARD"
@@ -173,7 +227,7 @@ EOF
 
 chmod +x "$SHINY_APPS_DIR/start-dashboard.sh"
 
-echo -e "${GREEN}Step 5: Setting up dashboard error fixes...${NC}"
+echo -e "${GREEN}Step 6: Setting up dashboard error fixes...${NC}"
 # Set up the error fixes - handle cases where file might already exist
 if [ -f "fix_dashboard_errors.r" ]; then
     # Check if the file is already in the target location
@@ -195,7 +249,7 @@ else
     echo -e "${YELLOW}  The dashboard may still have some error handling issues${NC}"
 fi
 
-echo -e "${GREEN}Step 6: Installing and configuring nginx...${NC}"
+echo -e "${GREEN}Step 7: Installing and configuring nginx...${NC}"
 # Install nginx if not present
 if ! command -v nginx &> /dev/null; then
     echo -e "${YELLOW}Installing nginx...${NC}"
@@ -291,6 +345,27 @@ server {
         proxy_busy_buffers_size 256k;
     }
     
+    # Handle /plots path specifically
+    location /plots {
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header Host \$host;
+        proxy_pass http://127.0.0.1:$PLOTS_PORT/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # WebSocket support for Shiny
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+        
+        # Buffer settings for better performance
+        proxy_buffering on;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+    }
+    
     # Handle static files for dashboard
     location ~* ^/dashboard/(.*\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))$ {
         proxy_set_header X-Real-IP \$remote_addr;
@@ -340,13 +415,13 @@ server {
 }
 EOF
 
-echo -e "${GREEN}Step 7: Enabling nginx site...${NC}"
+echo -e "${GREEN}Step 8: Enabling nginx site...${NC}"
 ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
 
-echo -e "${GREEN}Step 8: Creating management scripts...${NC}"
-# We'll create these in Step 10, just a placeholder here
+echo -e "${GREEN}Step 9: Creating management scripts...${NC}"
+# We'll create these in Step 11, just a placeholder here
 
-echo -e "${GREEN}Step 9: Testing nginx configuration...${NC}"
+echo -e "${GREEN}Step 10: Testing nginx configuration...${NC}"
 if nginx -t; then
     echo -e "${GREEN}✓ Nginx configuration is valid${NC}"
 else
@@ -354,7 +429,7 @@ else
     exit 1
 fi
 
-echo -e "${GREEN}Step 10: Starting services (Docker-compatible mode)...${NC}"
+echo -e "${GREEN}Step 11: Starting services (Docker-compatible mode)...${NC}"
 # Docker containers don't have systemd, so we'll start services directly
 
 echo -e "${YELLOW}Starting nginx...${NC}"
@@ -376,6 +451,13 @@ cd "/codeface/codeface/R/shiny/apps/details"
 R --slave -e "shiny::runApp(host = '0.0.0.0', port = $DETAILS_PORT)" &
 DETAILS_PID=$!
 echo $DETAILS_PID > /tmp/details.pid
+
+echo -e "${YELLOW}Starting CodeFace plots app...${NC}"
+# Start plots app in background
+cd "/codeface/codeface/R/shiny/apps/plots"
+R --slave -e "shiny::runApp(host = '0.0.0.0', port = $PLOTS_PORT)" &
+PLOTS_PID=$!
+echo $PLOTS_PID > /tmp/plots.pid
 
 # Wait a moment for services to start
 sleep 5
@@ -402,12 +484,19 @@ else
     exit 1
 fi
 
+if kill -0 $PLOTS_PID 2>/dev/null; then
+    echo -e "${GREEN}✓ CodeFace plots app is running (PID: $PLOTS_PID)${NC}"
+else
+    echo -e "${RED}✗ CodeFace plots app failed to start${NC}"
+    exit 1
+fi
+
 # Create management scripts
-echo -e "${GREEN}Step 11: Creating management scripts...${NC}"
+echo -e "${GREEN}Step 12: Creating management scripts...${NC}"
 
 cat > "$SHINY_APPS_DIR/start-services.sh" << EOF
 #!/bin/bash
-# Start nginx, CodeFace dashboard, and details app
+# Start nginx, CodeFace dashboard, details app, and plots app
 echo "Starting nginx..."
 nginx -g "daemon off;" &
 echo \$! > /tmp/nginx.pid
@@ -422,13 +511,18 @@ cd "/codeface/codeface/R/shiny/apps/details"
 R --slave -e "shiny::runApp(host = '0.0.0.0', port = $DETAILS_PORT)" &
 echo \$! > /tmp/details.pid
 
-echo "Services started. PIDs saved to /tmp/nginx.pid, /tmp/shiny.pid, and /tmp/details.pid"
+echo "Starting CodeFace plots app..."
+cd "/codeface/codeface/R/shiny/apps/plots"
+R --slave -e "shiny::runApp(host = '0.0.0.0', port = $PLOTS_PORT)" &
+echo \$! > /tmp/plots.pid
+
+echo "Services started. PIDs saved to /tmp/nginx.pid, /tmp/shiny.pid, /tmp/details.pid, and /tmp/plots.pid"
 echo "Use ./stop-services.sh to stop them"
 EOF
 
 cat > "$SHINY_APPS_DIR/stop-services.sh" << 'EOF'
 #!/bin/bash
-# Stop nginx, CodeFace dashboard, and details app
+# Stop nginx, CodeFace dashboard, details app, and plots app
 if [ -f /tmp/nginx.pid ]; then
     echo "Stopping nginx..."
     kill $(cat /tmp/nginx.pid) 2>/dev/null || true
@@ -445,6 +539,12 @@ if [ -f /tmp/details.pid ]; then
     echo "Stopping CodeFace details app..."
     kill $(cat /tmp/details.pid) 2>/dev/null || true
     rm -f /tmp/details.pid
+fi
+
+if [ -f /tmp/plots.pid ]; then
+    echo "Stopping CodeFace plots app..."
+    kill $(cat /tmp/plots.pid) 2>/dev/null || true
+    rm -f /tmp/plots.pid
 fi
 
 echo "All services stopped"
@@ -491,9 +591,21 @@ else
     echo "✗ CodeFace details app: Not running (no PID file)"
 fi
 
+if [ -f /tmp/plots.pid ]; then
+    PLOTS_PID=$(cat /tmp/plots.pid)
+    if kill -0 $PLOTS_PID 2>/dev/null; then
+        echo "✓ CodeFace plots app: Running (PID: $PLOTS_PID)"
+    else
+        echo "✗ CodeFace plots app: Not running (stale PID file)"
+        rm -f /tmp/plots.pid
+    fi
+else
+    echo "✗ CodeFace plots app: Not running (no PID file)"
+fi
+
 echo ""
 echo "=== Port Status ==="
-netstat -tlnp 2>/dev/null | grep -E ":(8081|8082|8083)" || echo "No services listening on ports 8081, 8082, or 8083"
+netstat -tlnp 2>/dev/null | grep -E ":(8081|8082|8083|8084)" || echo "No services listening on ports 8081, 8082, 8083, or 8084"
 EOF
 
 chmod +x "$SHINY_APPS_DIR"/*.sh
@@ -536,5 +648,6 @@ echo -e "${GREEN}Current service status:${NC}"
 echo "  Nginx PID: $NGINX_PID"
 echo "  CodeFace Dashboard PID: $SHINY_PID"
 echo "  CodeFace Details App PID: $DETAILS_PID"
+echo "  CodeFace Plots App PID: $PLOTS_PID"
 echo ""
 echo -e "${YELLOW}Note: Services are running in background. Use the management scripts to control them.${NC}"

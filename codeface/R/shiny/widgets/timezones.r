@@ -19,7 +19,7 @@
 library(png)
 library(grid)
 
-source("../../timezones.r", chdir=TRUE)
+source("../../timezones.r")
 
 ## This image was obtained from
 ## http://commons.wikimedia.org/wiki/File:UTC_hue4map_X_world_Robinson.png

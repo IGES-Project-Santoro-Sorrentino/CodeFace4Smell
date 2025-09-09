@@ -17,8 +17,8 @@
 ## All Rights Reserved.
 
 ## This file should contain the overview widgets for the main dashboard
-source("../symbols.r", chdir=TRUE)
-source("../figures.of.merit.r", chdir=TRUE)
+source("../symbols.r")
+source("../figures.of.merit.r")
 
 combine.status <- function(status.list) {
   status.individual <- c(unlist(status.list))
@@ -129,7 +129,7 @@ createWidgetClass(
   "Project Processing Status", "Short, one-widget project processing status",
   c("invisible"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list()
 )
 
@@ -205,7 +205,7 @@ createWidgetClass(
   "Project Summary", "Short, one-widget project summary",
   NULL, # no topical restrictions
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="overview")
 )
 
@@ -339,7 +339,7 @@ createWidgetClass(
   "Communication", "Information on how developers communicate",
   c("overview", "communication"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="communication")
 )
 
@@ -348,7 +348,7 @@ createWidgetClass(
   "Collaboration", "Information on how developers collaborate",
   c("overview", "collaboration"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="collaboration")
 )
 
@@ -357,7 +357,7 @@ createWidgetClass(
   "Complexity", "Information on code complexity",
   c("overview", "complexity"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="complexity")
 )
 
@@ -366,7 +366,7 @@ createWidgetClass(
   "Construction", "Information on the construction and architecture of the project",
   c("overview", "construction"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="construction")
 )
 

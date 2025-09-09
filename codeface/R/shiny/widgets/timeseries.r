@@ -17,7 +17,7 @@
 ## All Rights Reserved.
 
 suppressPackageStartupMessages(library(scales))
-source("../../ts_utils.r", chdir=TRUE)
+source("../../ts_utils.r")
 
 createWidgetClass(
   c("widget.timeseries.messages.per.day", "widget.timeseries"),
