@@ -17,7 +17,7 @@
 ## All Rights Reserved.
 
 suppressPackageStartupMessages(library(scales))
-source("../../ts_utils.r", chdir=TRUE)
+source("../../ts_utils.r")
 
 ## Visualise time series including release boundaries
 get.ts.data <- function(con, pid, name) {

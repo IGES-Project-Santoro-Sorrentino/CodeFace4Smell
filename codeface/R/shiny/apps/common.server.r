@@ -158,7 +158,7 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
           choices <- listViews(w)()
           if (length(choices) > 1) {
             title <- if(project == pid()) { "View:" } else { paste("View (", project.title, "):", sep="") }
-            list(selectInput(paste("view", project, sep=""), h3(title), choices=choices))
+            list(selectInput(paste("view", project, sep=""), title, choices=choices))
           } else {
             list()
           }

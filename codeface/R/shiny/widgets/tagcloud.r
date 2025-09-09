@@ -25,7 +25,7 @@ createWidgetClass(
   "Tag cloud of frequent mailing list subjects",
   c("communication"),
   2, 1,
-  html=htmlOutput
+  html=shiny::htmlOutput
 )
 
 initWidget.widget.tagcloud.mlsubjects <- function(w) {

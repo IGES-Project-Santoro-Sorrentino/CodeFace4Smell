@@ -36,9 +36,31 @@ get.release.distance.data <- function(con, name.list) {
     return(query.project.name(con, pid))
   })
 
-  dat <- do.call(rbind, lapply(1:length(name.list), function(i) {
-    data.frame(project=name.list[[i]], distance=ts.list[[i]]$value,
-               date=ts.list[[i]]$time)
+  # Filter out empty time series and ensure all vectors have the same length
+  valid.indices <- which(sapply(ts.list, function(ts) {
+    !is.null(ts) && nrow(ts) > 0 && !is.null(ts$value) && !is.null(ts$time)
+  }))
+  
+  if (length(valid.indices) == 0) {
+    # Return empty data frame with correct structure
+    return(data.frame(project=character(0), distance=numeric(0), date=as.POSIXct(character(0))))
+  }
+
+  dat <- do.call(rbind, lapply(valid.indices, function(i) {
+    ts <- ts.list[[i]]
+    project.name <- name.list[[i]]
+    
+    # Ensure all vectors have the same length
+    min.length <- min(length(ts$value), length(ts$time))
+    if (min.length == 0) {
+      return(data.frame(project=character(0), distance=numeric(0), date=as.POSIXct(character(0))))
+    }
+    
+    data.frame(
+      project=rep(project.name, min.length), 
+      distance=ts$value[1:min.length],
+      date=ts$time[1:min.length]
+    )
   }))
 
   return(dat)
@@ -46,6 +68,14 @@ get.release.distance.data <- function(con, name.list) {
 
 do.release.distance.plot <- function(con, names.list) {
   dat <- get.release.distance.data(con, names.list)
+
+  # Handle empty data case
+  if (nrow(dat) == 0) {
+    g <- ggplot() + 
+      annotate("text", x=0.5, y=0.5, label="No release distance data available", size=5) +
+      theme_void()
+    return(g)
+  }
 
   g <- ggplot(dat, aes(x=project, y=distance)) +
     geom_boxplot(outlier.colour="red") +

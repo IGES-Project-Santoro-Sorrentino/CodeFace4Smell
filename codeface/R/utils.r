@@ -1,5 +1,8 @@
 # Some utility functions that can be loaded with source("utility.r")
 
+# Load required libraries
+suppressPackageStartupMessages(library(lubridate))
+
 # This file is part of Codeface. Codeface is free software: you can
 # redistribute it and/or modify it under the terms of the GNU General Public
 # License as published by the Free Software Foundation, version 2.
@@ -18,7 +21,30 @@
 # All Rights Reserved.
 
 ## Interpret an integer as timestamp from the UNIX epoch
-tstamp.to.POSIXct <- function(z) as.POSIXct(as.integer(z), origin="1970-01-01")
+## Also handle datetime strings in YYYY-MM-DD HH:MM:SS format
+tstamp.to.POSIXct <- function(z) {
+  # Check if z is already a POSIXct object
+  if (inherits(z, "POSIXct")) {
+    return(z)
+  }
+  
+  # Check if z is a character string (datetime format)
+  if (is.character(z)) {
+    # Try to parse as datetime string first
+    parsed <- ymd_hms(z, quiet=TRUE)
+    if (!any(is.na(parsed))) {
+      return(parsed)
+    }
+    # If that fails, try other common formats
+    parsed <- as.POSIXct(z, format="%Y-%m-%d %H:%M:%S")
+    if (!any(is.na(parsed))) {
+      return(parsed)
+    }
+  }
+  
+  # Fall back to Unix timestamp conversion
+  as.POSIXct(as.integer(z), origin="1970-01-01")
+}
 
 ## Convert a time series into a data frame
 ## The data frame contains the timestamps (index(ts)),

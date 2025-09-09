@@ -23,7 +23,7 @@ createWidgetClass(
   "General information",
   NULL, # no topical restrictions
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="basics")
 )
 

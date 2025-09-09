@@ -19,7 +19,7 @@
 detailpage <- list(name="widget.clusters.clusters,widget.clusters.correlations,widget.clusters.summary",
                    title="Collaboration Clusters")
 
-source("../../clusters.r", chdir=TRUE)
+source("../../clusters.r")
 
 ## Create overviews about the types of collaboration graphs appearing in
 ## projects.

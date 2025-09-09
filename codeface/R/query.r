@@ -22,6 +22,7 @@ suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(plyr))
 suppressPackageStartupMessages(library(logging))
+suppressPackageStartupMessages(library(lubridate))
 
 ## Obtain the series.merged object constructed in do.ts.analysis
 query.series.merged <- function(conf, subset=NULL) {
@@ -149,8 +150,33 @@ get.cycles.con <- function(con, pid, boundaries=FALSE, allow.empty.ranges=FALSE)
   }
 
   res <- res[, column.selection]
-  res$date.start <- ymd_hms(res$date.start, quiet=TRUE)
-  res$date.end <- ymd_hms(res$date.end, quiet=TRUE)
+  
+  # Handle date parsing more robustly
+  if (!inherits(res$date.start, "POSIXct")) {
+    if (is.character(res$date.start)) {
+      res$date.start <- ymd_hms(res$date.start, quiet=TRUE)
+      if (any(is.na(res$date.start))) {
+        # Try alternative parsing
+        res$date.start <- as.POSIXct(res$date.start, format="%Y-%m-%d %H:%M:%S")
+      }
+    } else {
+      # Assume it's a numeric timestamp
+      res$date.start <- as.POSIXct(res$date.start, origin="1970-01-01")
+    }
+  }
+  
+  if (!inherits(res$date.end, "POSIXct")) {
+    if (is.character(res$date.end)) {
+      res$date.end <- ymd_hms(res$date.end, quiet=TRUE)
+      if (any(is.na(res$date.end))) {
+        # Try alternative parsing
+        res$date.end <- as.POSIXct(res$date.end, format="%Y-%m-%d %H:%M:%S")
+      }
+    } else {
+      # Assume it's a numeric timestamp
+      res$date.end <- as.POSIXct(res$date.end, origin="1970-01-01")
+    }
+  }
 
   return(res)
 }
