@@ -26,7 +26,7 @@ from .configuration import Configuration, ConfigurationError
 from .cluster.cluster import doProjectAnalysis, LinkType
 from .ts import dispatch_ts_analysis
 from .util import (execute_command, generate_reports, gen_range_path, gen_prefix, get_analysis_windows,
-                   check4ctags, check4cppstats, BatchJobPool, generate_analysis_windows)
+                   check4ctags, check4cppstats, BatchJobPool, generate_analysis_windows, ensure_all_unprefixed_aliases)
 from .conway import dispatch_jira_processing, parseCommitLoC
 
 def loginfo(msg):
@@ -150,6 +150,9 @@ def project_analyse(resdir, gitdir, codeface_conf, project_conf,
 
     # Wait until all batch jobs are finished
     pool.join()
+
+    #Time Series alias
+    ensure_all_unprefixed_aliases(project_resdir)
 
     #########
     # Global stage 1: Time series generation

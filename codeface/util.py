@@ -539,3 +539,46 @@ def generate_analysis_windows(repo, window_size_months):
     rcs = [None for x in range(len(revs))]
 
     return revs_hash, rcs, revs_date
+
+# --- Fallback per directory di range con prefisso NNN-- ---
+#def resolve_range_dir(tag_root: str, from_to: str) -> str:
+#    """
+#    Restituisce la directory del range anche se è salvata come NNN--<from_to>.
+#    Esempio: from_to = 'php-5.3.0-php-5.3.1'
+#    """
+#    short = os.path.join(tag_root, from_to)
+#    if os.path.isdir(short):
+#        return short
+#    # cerca *--<from_to>, prendendo l'ultimo in ordine alfabetico se ce ne sono più
+#    candidates = sorted(glob(os.path.join(tag_root, f"*--{from_to}")))
+#    return candidates[-1] if candidates else short
+
+#Alias creation
+def ensure_unprefixed_alias(range_resdir: str):
+    """
+    Se la dir ha prefisso NNN--, crea (se mancante) un alias senza prefisso
+    nella stessa cartella (symlink). Esempio:
+      001--php-5.3.0-php-5.3.1  ->  php-5.3.0-php-5.3.1
+    """
+    base = os.path.basename(range_resdir)
+    alias = re.sub(r"^\d{3}--", "", base)
+    if alias == base:
+        return  # nessun prefisso, nulla da fare
+    alias_path = os.path.join(os.path.dirname(range_resdir), alias)
+    if not os.path.exists(alias_path):
+        try:
+            os.symlink(base, alias_path)
+        except OSError:
+            # in ambienti dove i symlink sono vietati puoi no-op (o copiare, sconsigliato)
+            pass
+
+def ensure_all_unprefixed_aliases(tag_root: str):
+    """
+    Per ogni directory NNN--* in tag_root crea (se manca) l'alias senza prefisso.
+    """
+    if not os.path.isdir(tag_root):
+        return
+    for name in os.listdir(tag_root):
+        path = os.path.join(tag_root, name)
+        if os.path.isdir(path) and re.match(r"^\d{3}--", name):
+            ensure_unprefixed_alias(path)

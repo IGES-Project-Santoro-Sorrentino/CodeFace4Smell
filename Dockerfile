@@ -76,6 +76,13 @@ RUN Rscript rpackages/install_github_packages.R
 COPY setup.py setup.py
 
 COPY . .
+
+# Contro CRLF e permessi
+RUN apt-get update && apt-get install -y --no-install-recommends dos2unix perl \
+ && find /codeface -type f \( -name "*.sh" -o -name "*.r" -o -name "*.pl" \) -print0 | xargs -0 dos2unix -f \
+ && chmod +x /codeface/codeface/R/*.r /codeface/codeface/R/cluster/*.r /codeface/codeface/perl/*.pl \
+ && chmod +x /codeface/start_server.sh
+
 COPY cppstats /opt/cppstats
 RUN chmod +x /opt/cppstats/cppstats.py
 
