@@ -99,21 +99,45 @@ gen.weighted.edgelist <- function(edges) {
 ## Give a cluster identifier and (optionally) the page rank technique,
 ## (re)construct an igraph object from the DB
 construct.cluster <- function(con, cluster.id, technique=0) {
-  edges <- query.cluster.edges(con, cluster.id)
-  members <- query.cluster.members(con, cluster.id, prank=TRUE, technique=technique)
-
-  if (!all(unique(c(edges$toId, edges$fromId)) %in% members$person)) {
-    stop("Internal error: edges for non-existent persons in cluster ", cluster.id)
-  }
-
-  if (is.null(edges)) {
-    logwarn(paste("Duh: cluster without edges for id ", cluster.id, "?!\n"),
-            logger="util")
+  # Check if cluster.id is valid
+  if (is.null(cluster.id) || is.na(cluster.id) || cluster.id == "") {
+    logwarn(paste("Invalid cluster.id:", cluster.id))
     return(NULL)
   }
+  
+  tryCatch({
+    edges <- query.cluster.edges(con, cluster.id)
+    members <- query.cluster.members(con, cluster.id, prank=TRUE, technique=technique)
 
-  g <- graph.data.frame(edges, vertices=members)
-  return(g)
+    # Check if we have valid data
+    if (is.null(edges) || is.null(members) || nrow(members) == 0) {
+      logwarn(paste("No edges or members found for cluster", cluster.id))
+      return(NULL)
+    }
+
+    # Check if edges reference valid members
+    if (nrow(edges) > 0) {
+      edge.ids <- unique(c(edges$toId, edges$fromId))
+      member.ids <- members$personId
+      
+      if (!all(edge.ids %in% member.ids)) {
+        logwarn(paste("Some edges reference non-existent persons in cluster", cluster.id))
+        # Filter out invalid edges
+        valid.edges <- edges[edges$toId %in% member.ids & edges$fromId %in% member.ids,]
+        if (nrow(valid.edges) == 0) {
+          logwarn(paste("No valid edges remaining for cluster", cluster.id))
+          return(NULL)
+        }
+        edges <- valid.edges
+      }
+    }
+
+    g <- graph.data.frame(edges, vertices=members)
+    return(g)
+  }, error = function(e) {
+    logwarn(paste("Error constructing cluster", cluster.id, ":", e$message))
+    return(NULL)
+  })
 }
 
 
@@ -149,16 +173,16 @@ get.num.cores <- function() {
 perform.git.checkout <- function(repodir, commit.hash, code.dir, archive.file) {
   args <- str_c(" --git-dir=", repodir, " archive -o ", archive.file,
                 " --format=tar --prefix='code/' ", commit.hash)
-  do.system("git", args)
+  system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE)
 
   args <- str_c("-C ", code.dir, " -xf ", archive.file)
-  do.system("tar", args)
+  system(str_c("tar", args), intern=TRUE, ignore.stderr=TRUE)
 }
 
 ## Return the content of a file at a given revision
 show.git.file <- function(repodir, commit.hash, file) {
   args <- str_c(" --git-dir=", repodir, " show ", commit.hash, ":", file, sep="")
-  return(do.system("git", args))
+  return(system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE))
 }
 
 ## Some helper functions to ensure that functions (and the

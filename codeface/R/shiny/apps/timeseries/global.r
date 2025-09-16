@@ -16,5 +16,4 @@
 ## Copyright 2013 by Siemens AG, Wolfgang Mauerer <wolfgang.mauerer@siemens.com>
 ## All Rights Reserved.
 
-source("../common.server.r", chdir=TRUE)
-server <- detailPage()
+source("../common.server.r", chdir=TRUE, local=TRUE)

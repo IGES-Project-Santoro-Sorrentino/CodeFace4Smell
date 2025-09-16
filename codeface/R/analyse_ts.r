@@ -631,7 +631,8 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
   ## TODO: log and sqrt transform are reasonable for the averaged, but not
   ## for the cumulative series
   tryCatch({
-    g <- ggplot(series.merged, aes(x=time, y=value)) + geom_line() +
+    g <- ggplot(series.merged, aes(x=time, y=value)) + 
+      geom_line(aes(group=type)) +
       facet_grid(type~., scale="free_y") +
       geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
                  data=boundaries.plot) +

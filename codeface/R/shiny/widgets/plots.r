@@ -54,7 +54,7 @@ do.ts.plot <- function(ts, boundaries, title, y.label, smooth, transform) {
   g <- ggplot(ts, aes(x=time, y=value)) + geom_point() +
     geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
                data=boundaries) +
-    stat_smooth(aes(group=1), size=1) +
+    stat_smooth(aes(group=1), linewidth=1) +
     scale_fill_manual(values = alpha(c("blue", "red"), .1)) +
     xlab("Time") + ylab(y.label) +
     ggtitle(title) +
@@ -74,7 +74,8 @@ createWidgetClass(
   "Can show different time series calculated for this project",
   size.x = 2,
   size.y = 1,
-  html = widget.plotOutput.html
+  html = widget.plotOutput.html,
+  detailpage=list(app="plots", topic="complexity")
 )
 
 initWidget.widget.timeseries <- function(w) {

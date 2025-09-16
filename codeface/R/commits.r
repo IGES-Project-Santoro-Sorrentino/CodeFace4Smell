@@ -74,7 +74,7 @@ gen.commits.info <- function(con, pid, range.id) {
                                        normalise.commit.dat)
 
   plot.types <- c("CmtMsgBytes", "ChangedFiles", "DiffSize")
-  if (sum(cmt.info$NumTags) > 0) {
+  if (!is.null(cmt.info) && sum(cmt.info$NumTags) > 0) {
     ## The data do contain tagging information
     plot.types <- c(plot.types, "NumTags")
   }

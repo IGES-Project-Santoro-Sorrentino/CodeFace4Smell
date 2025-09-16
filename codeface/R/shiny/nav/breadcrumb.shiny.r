@@ -57,7 +57,7 @@ breadcrumbPanelData <- function (originId, paramstr = "") {
 
   ## check paramstr and remove leading ? if present
   if (is.null(paramstr)) paramstr <- ""
-  if (nchar(paramstr) > 0 && substring(paramstr,1,1) == "?"){
+  if (isTRUE(nchar(paramstr) > 0) && substring(paramstr,1,1) == "?"){
     paramstr <- substring(paramstr,2)
   }
 
@@ -291,16 +291,71 @@ compareWithProjectsOutput <- function( outputId ) {
 ## server.r function to render the output elements
 ##
 chosenSelectInput <- function(inputId, label, choices, multiple=FALSE, selected=NULL, options = list()) {
+  # Debug output
+  cat("DEBUG chosenSelectInput:\n")
+  cat("  inputId:", inputId, "\n")
+  cat("  label length:", length(label), "- value:", label, "\n")
+  cat("  choices length:", length(choices), "\n")
+  cat("  selected length:", if(is.null(selected)) 0 else length(selected), "\n")
+  cat("  multiple:", multiple, "\n")
+  
+  # Ensure label is a single value
+  if (length(label) > 1) {
+    label <- label[1]
+    warning("Label had length > 1, using only first element")
+  }
+  
+  # Safe handling of selected parameter
+  # Check conditions separately to avoid logical coercion issues
+  has_selected <- !is.null(selected)
+  is_vector <- isTRUE(has_selected) && is.vector(selected)
+  has_length <- isTRUE(is_vector) && isTRUE(length(selected) > 0)
+  
+  if (isTRUE(has_selected) && isTRUE(is_vector) && isTRUE(has_length)) {
+    if (multiple) {
+      selected <- as.character(selected)
+    } else {
+      selected <- as.character(selected[1])
+    }
+  } else {
+    selected <- NULL
+  }
+  
+  # Create selectInput
   select <- selectInput(inputId, "", choices, multiple=multiple, selected=selected)
-  select.tag <- select[[2]]
-  select.tag$attribs$class <- "chosen-select"
-  select.tag$attribs[["data-placeholder"]] <- label
-  select[[2]] <- select.tag
-  opts <- toJSON(options, collapse="")
-  if (length(options) == 0) opts <- ""
-  js <- paste("$('.chosen-select#",inputId,"').chosen(",opts,");", sep="",collapse="")
-  tagList(select, tags$script(js))
+  
+  # SAFE ACCESS: Check if select has the expected structure
+  if (is.list(select) && isTRUE(length(select) >= 2)) {
+    select.tag <- select[[2]]
+  } else {
+    # Fallback: if structure is unexpected, return basic selectInput
+    cat("WARNING: selectInput returned unexpected structure, using fallback\n")
+    return(select)
+  }
+  
+  # Only proceed if we successfully got the tag
+  if (!is.null(select.tag)) {
+    # Check if attribs exists
+    if (is.null(select.tag$attribs)) {
+      select.tag$attribs <- list()
+    }
+    
+    select.tag$attribs$class <- "chosen-select"
+    select.tag$attribs[["data-placeholder"]] <- as.character(label[1])
+    select[[2]] <- select.tag
+    
+    # Generate JavaScript
+    opts <- toJSON(options, collapse="")
+    if (length(options) == 0) opts <- ""
+    js <- paste("$('.chosen-select#",inputId,"').chosen(",opts,");", sep="",collapse="")
+    
+    return(tagList(select, tags$script(js)))
+  } else {
+    # If we can't modify the tag, return basic selectInput
+    return(select)
+  }
 }
+
 
 renderCompareWithProjectsInput <- function( inputId, label, choices, selected = NULL , options = list() ) {
   renderUI({

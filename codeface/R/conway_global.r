@@ -189,9 +189,15 @@ dispatch.all <- function(conf, resdir, motif.type) {
     corr.dat$panel <- corr.dat$combination
     corr.dat$panel <- mapvalues(corr.dat$panel, map.panels$combination, map.panels$panel)
     plots <- lapply(1:num.panels, function(i) {
-        g <- ggplot(corr.dat[corr.dat$panel==i,], aes(x=date, y=value,
+        # Ensure date column is properly formatted as Date
+        panel_data <- corr.dat[corr.dat$panel==i,]
+        if (!inherits(panel_data$date, "Date")) {
+            panel_data$date <- as.Date(panel_data$date)
+        }
+        
+        g <- ggplot(panel_data, aes(x=date, y=value,
                                                       colour=combination, shape=combination)) +
-             geom_point() + geom_line() + scale_x_date("", date_labels="%m-%Y") +
+             geom_point() + geom_line(aes(group=combination)) + scale_x_date("", date_labels="%m-%Y") +
              ylab("Correlation") +  theme_bw() +
              expand_limits(y=c(-1,1))
 
@@ -267,6 +273,10 @@ dispatch.all <- function(conf, resdir, motif.type) {
                     Churn="Code Churn [log]", bug.density="Bug Density")
 
         dat.molten <- melt(dat, id.vars=c("date", "range"))
+        # Ensure date column is properly formatted as Date
+        if (!inherits(dat.molten$date, "Date")) {
+            dat.molten$date <- as.Date(dat.molten$date)
+        }
         g <- ggplot(dat.molten, aes(x=date, y=value)) + geom_boxplot(aes(x=date, group=date)) +
             facet_grid(variable~., scales="free_y", labeller=labeller(variable=labels)) +
             scale_x_date("Date", date_labels="%m-%Y") + expand_limits(y=0) +
@@ -327,7 +337,12 @@ dispatch.all <- function(conf, resdir, motif.type) {
     ## #####################################################
     ## Plot a time series with absolute empirical motif counts
     plot.file <- file.path(plot.dir, "motif_ts_abs.pdf")
-    g <- ggplot(res, aes(x=as.Date(date), y=empirical.count)) + geom_point() + geom_line() +
+    # Ensure date column is properly formatted as Date
+    if (!inherits(res$date, "Date")) {
+        res$date <- as.Date(res$date)
+    }
+    g <- ggplot(res, aes(x=date, y=empirical.count)) + geom_point() + 
+        geom_line(aes(group=count.type)) +
         facet_grid(count.type~., scales="free_y", labeller=labeller(count.type=labels)) +
         scale_x_date("Date", date_labels="%m-%Y") + expand_limits(y=0) +
         ylab("Count or Ratio") + theme_bw() + ggtitle(make.title(conf, motif.type))

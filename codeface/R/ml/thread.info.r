@@ -69,7 +69,8 @@ plot.thread.densities <- function(thread.info, title="") {
                             data.frame(num=d.msg$x, density=d.msg$y,
                                        type="Messages"))
 
-  g <- ggplot(thread.densities, aes(x=num, y=density)) + geom_line() +
+  g <- ggplot(thread.densities, aes(x=num, y=density)) + 
+       geom_line(aes(group=type)) +
        scale_y_sqrt() + facet_grid(type~.) + xlab("Number per thread") +
        ylab("Density") + ggtitle(title)
 

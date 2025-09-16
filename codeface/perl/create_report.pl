@@ -28,7 +28,7 @@ sub gen_file_table($$$$;$) {
   my $type = shift;
   my $labelfun = shift;
 
-  my ($count, $res, $off, $file);
+  my ($count, $res, $off, $file, $rel_file);
   my @files = @{$files_ptr};
   my $num = $#files + 1;
 
@@ -37,18 +37,22 @@ sub gen_file_table($$$$;$) {
   for ($count = 0; $count < int($num/$cols); $count++) {
     for ($off = 0; $off < $cols; $off++) {
       $file = $files[$count*$cols+$off];
+      # Convert absolute path to relative path (just filename)
+      $rel_file = $file;
+      $rel_file =~ s/.*\///;  # Remove path, keep only filename
+      
       if ($type eq "input") {
 	$res .= "\\begin{minipage}{" .  (1/$cols) . "\\linewidth}\n";
 	if ($labelfun) {
 	  $res .= &$labelfun($count*$cols+$off);
 	}
-	$res .= "\\input{$file}\n";
+	$res .= "\\input{$rel_file}\n";
 	$res .= "\\end{minipage}";
       } else {
 	if ($labelfun) {
 	  $res .= &$labelfun($count*$cols+$off);
 	}
-	$res .= "\\includegraphics[width=" . (1/$cols) . "\\linewidth]{$file}"
+	$res .= "\\includegraphics[width=" . (1/$cols) . "\\linewidth]{$rel_file}"
       }
     }
     if ($num > 0) {
@@ -58,18 +62,22 @@ sub gen_file_table($$$$;$) {
 
   for ($count = 0; $count < $num % $cols; $count++) {
     $file = $files[$cols*int($num/$cols)+$count];
+    # Convert absolute path to relative path (just filename)
+    $rel_file = $file;
+    $rel_file =~ s/.*\///;  # Remove path, keep only filename
+    
     if ($type eq "input") {
       $res .= "\\begin{minipage}{" .  (1/$cols) . "\\linewidth}\n";
       if ($labelfun) {
 	$res .= &$labelfun($count*$cols+$off);
       }
-      $res .= "\\input{$file}\n";
+      $res .= "\\input{$rel_file}\n";
       $res .= "\\end{minipage}";
     } else {
       if ($labelfun) {
 	$res .= &$labelfun($count*$cols+$off);
       }
-      $res .= "\\includegraphics[width=" . (1/$cols) . "\\linewidth]{$file}"
+      $res .= "\\includegraphics[width=" . (1/$cols) . "\\linewidth]{$rel_file}"
     }
   }
   if ($num > 0) {
@@ -91,19 +99,28 @@ sub gen_latex_iter($$$;$) {
   }
 
   my @files = split /\n/, `ls $filespec*$suffix 2>/dev/null`;
+  
+  # Limit the number of images to prevent LaTeX from running out of control sequences
+  # Keep only the first 50 images to avoid overwhelming LaTeX
+  if ($type eq "includegraphics" && scalar(@files) > 50) {
+    my $total_files = scalar(@files);
+    @files = @files[0..49];
+    print "\\textit{Note: Showing first 50 of $total_files images to prevent LaTeX compilation issues.}\\\\";
+  }
+  
   return gen_file_table(\@files, $cols, $filespec, $type, $labelfun);
 }
 
 sub print_subsys_info($) {
     my $basedir = shift;
     print "\\newpage\\subsection{Subsystem Distribution in Clusters (Spin Glass)}\n";
-    print "\\includegraphics[width=\\linewidth]{$basedir/sg_comm_subsys.pdf}";
+    print "\\includegraphics[width=\\linewidth]{sg_comm_subsys.pdf}";
 
     print "\\newpage\\subsection{Subsystem Distribution in Clusters (Random Walk, large)}\n";
-    print "\\includegraphics[width=\\linewidth]{$basedir/wt_comm_subsys_big.pdf}";
+    print "\\includegraphics[width=\\linewidth]{wt_comm_subsys_big.pdf}";
 
     print "\\newpage\\subsection{Subsystem Distribution in Clusters (Random Walk, small)}\n";
-    print "\\includegraphics[width=\\linewidth]{$basedir/wt_comm_subsys_small.pdf}";
+    print "\\includegraphics[width=\\linewidth]{wt_comm_subsys_small.pdf}";
 
     print "\\section{Statistical Summaries}\n";
     print "\\subsection{Statistical Summaries (Spin Glass Clusters)}\n";
@@ -130,10 +147,13 @@ my $cycle=$ARGV[1];
 binmode(STDOUT, ":utf8");
 print <<"END";
 \\documentclass{article}
-\\usepackage[landscape,a4paper,pdftex,top=5mm,bottom=5mm,left=5mm,right=5mm]{geometry}
+\\usepackage[landscape,a4paper,top=5mm,bottom=5mm,left=5mm,right=5mm]{geometry}
 \\usepackage{graphicx}
 \\usepackage{calc}
 \\usepackage{lmodern}
+\\usepackage[utf8]{inputenc}
+\\usepackage{array}
+\\usepackage{longtable}
 \\begin{document}
 \\setlength{\\parindent}{0pt}
 \\begin{center}
@@ -142,24 +162,24 @@ print <<"END";
 \\end{Large}
 \\end{center}
 \\section{Developer rankings}
-\\begin{small}\\renewcommand{\\tabcolsep}{1pt}
+\\begin{small}\\renewcommand{\\tabcolsep}{1pt}\\fontsize{6}{7}\\selectfont
 \\begin{minipage}{0.5\\linewidth}
 PageRank\\\\
-\\input{$basedir/top20.pr.tex}
+\\input{top20.pr.tex}
 \\end{minipage}%
 \\begin{minipage}{0.5\\linewidth}
 PageRank (transposed)\\\\
-\\input{$basedir/top20.pr.tr.tex}
+\\input{top20.pr.tr.tex}
 \\end{minipage}
 
-\\renewcommand{\\tabcolsep}{5pt}
+\\renewcommand{\\tabcolsep}{2pt}\\fontsize{6}{7}\\selectfont
 \\begin{minipage}{0.5\\linewidth}
 Number of commits\\\\
-\\input{$basedir/top20.numcommits.tex}
+\\input{top20.numcommits.tex}
 \\end{minipage}%
 \\begin{minipage}{0.5\\linewidth}
 Changed lines\\\\
-\\input{$basedir/top20.total.tex}
+\\input{top20.total.tex}
 \\end{minipage}
 \\end{small}
 END

@@ -38,7 +38,7 @@ get.release.distance.data <- function(con, name.list) {
 
   # Filter out empty time series and ensure all vectors have the same length
   valid.indices <- which(sapply(ts.list, function(ts) {
-    !is.null(ts) && nrow(ts) > 0 && !is.null(ts$value) && !is.null(ts$time)
+    isTRUE(!is.null(ts)) && isTRUE(nrow(ts) > 0) && isTRUE(!is.null(ts$value)) && isTRUE(!is.null(ts$time))
   }))
   
   if (length(valid.indices) == 0) {
@@ -72,7 +72,8 @@ do.release.distance.plot <- function(con, names.list) {
   # Handle empty data case
   if (nrow(dat) == 0) {
     g <- ggplot() + 
-      annotate("text", x=0.5, y=0.5, label="No release distance data available", size=5) +
+      geom_text(aes(x=0.5, y=0.5, label="No release distance data available"), size=5) +
+      xlim(0, 1) + ylim(0, 1) +
       theme_void()
     return(g)
   }
@@ -92,7 +93,8 @@ createWidgetClass(
   c("construction"),
   size.x = 1,
   size.y = 1,
-  compareable=TRUE
+  compareable=TRUE,
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 renderWidget.widget.release.distance <- function(w) {
@@ -100,10 +102,10 @@ renderWidget.widget.release.distance <- function(w) {
     projectname <- projects.list$name[[which(projects.list$id == as.integer(w$pid()))]]
     if(is.null(w$pids.compare())) {
       compare.projectnames <- list()
-      if (!is.null(w$name2) && !is.null(w$name2())) {
+      if (isTRUE(!is.null(w$name2)) && isTRUE(!is.null(w$name2()))) {
         compare.projectnames <- c(compare.projectnames, w$name2())
       }
-      if (!is.null(w$name3) && !is.null(w$name3())) {
+      if (isTRUE(!is.null(w$name3)) && isTRUE(!is.null(w$name3()))) {
         compare.projectnames <- c(compare.projectnames, w$name3())
       }
     } else {

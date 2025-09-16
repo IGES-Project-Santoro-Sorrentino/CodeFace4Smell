@@ -25,37 +25,92 @@ createWidgetClass(
   "Tag cloud of frequent mailing list subjects",
   c("communication"),
   2, 1,
-  html=shiny::htmlOutput
+  html=shiny::htmlOutput,
+  detailpage=list(app="dashboard", topic="communication")
 )
 
 initWidget.widget.tagcloud.mlsubjects <- function(w) {
   w <- NextMethod()
-  w$data <- reactive({dbGetQuery(conf$con, str_c("SELECT subject, count FROM",
-    " freq_subjects WHERE projectId=", w$pid(),
-    " ORDER BY count DESC LIMIT 100"))})
+  w$data <- reactive({
+    tryCatch({
+      result <- dbGetQuery(conf$con, str_c("SELECT subject, count FROM",
+        " freq_subjects WHERE projectId=", w$pid(),
+        " ORDER BY count DESC LIMIT 100"))
+      if (is.null(result) || nrow(result) == 0) {
+        return(data.frame(subject=character(0), count=integer(0)))
+      }
+      return(result)
+    }, error = function(e) {
+      loginfo(paste("Error querying freq_subjects for project", w$pid(), ":", e$message))
+      return(data.frame(subject=character(0), count=integer(0)))
+    })
+  })
   w$frequencies <- reactive({
     d <- w$data()
-    lapply(1:length(d$subject), function(i) {
-           freqs <- termFreq(PlainTextDocument(stripWhitespace(removeWords(
-                             removeNumbers(removePunctuation(d$subject[[i]])),
-                             c(stopwords("english"), "V","v", "PATCH", "PATCHv",
-                               "are", "one")))))
-           freqs <- freqs * d$count[[i]]
+    if (is.null(d) || nrow(d) == 0 || length(d$subject) == 0) {
+      return(list())
+    }
+    tryCatch({
+      lapply(1:length(d$subject), function(i) {
+        if (isTRUE(i <= length(d$subject)) && isTRUE(!is.na(d$subject[[i]])) && isTRUE(d$subject[[i]] != "")) {
+          freqs <- termFreq(PlainTextDocument(stripWhitespace(removeWords(
+                            removeNumbers(removePunctuation(d$subject[[i]])),
+                            c(stopwords("english"), "V","v", "PATCH", "PATCHv",
+                              "are", "one")))))
+          freqs <- freqs * d$count[[i]]
+          return(freqs)
+        } else {
+          return(termFreq(PlainTextDocument("")))
+        }
+      })
+    }, error = function(e) {
+      loginfo(paste("Error processing frequencies for project", w$pid(), ":", e$message))
+      return(list())
     })
   })
   w$frequency <- reactive({
-    tdm <- do.call(c, w$frequencies())
-    row_sums(tdm)
+    freqs_list <- w$frequencies()
+    if (length(freqs_list) == 0) {
+      return(numeric(0))
+    }
+    tryCatch({
+      tdm <- do.call(c, freqs_list)
+      if (is.null(tdm) || length(tdm) == 0) {
+        return(numeric(0))
+      }
+      row_sums(tdm)
+    }, error = function(e) {
+      loginfo(paste("Error calculating frequency for project", w$pid(), ":", e$message))
+      return(numeric(0))
+    })
   })
   return(w)
 }
 
 renderWidget.widget.tagcloud.mlsubjects <- function(w) {
   renderUI({
-    toString(names(w$frequency()))
-    toString(w$frequency())
     v <- w$frequency()
+    
+    # Check if we have any frequency data
+    if (is.null(v) || length(v) == 0 || all(v == 0)) {
+      div.id <- paste("wordcloudcontainer", w$pid(), sep="")
+      return(tagList(
+        tags$div(id=div.id, style="margin-top: 20px; text-align: center; padding: 40px;"),
+        tags$p("No mailing list subject data available for this project", 
+               style="color: #666; font-size: 14px;")
+      ))
+    }
+    
     max.v <- max(v)
+    if (max.v <= 0) {
+      div.id <- paste("wordcloudcontainer", w$pid(), sep="")
+      return(tagList(
+        tags$div(id=div.id, style="margin-top: 20px; text-align: center; padding: 40px;"),
+        tags$p("No meaningful subject data available for this project", 
+               style="color: #666; font-size: 14px;")
+      ))
+    }
+    
     scale.f <- function(x) {
       10 + 30 * 5**log10(x/max.v)
     }

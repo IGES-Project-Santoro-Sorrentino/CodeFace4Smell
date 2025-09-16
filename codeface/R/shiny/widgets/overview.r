@@ -130,7 +130,7 @@ createWidgetClass(
   c("invisible"),
   1, 1,
   html=shiny::htmlOutput,
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="overview")
 )
 
 initWidget.widget.overview.processing <- function(w) {
@@ -311,7 +311,7 @@ widgetExplanation.widget.overview.project <- function(w) {
     warn <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.warn)]
     bad <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.bad)]
     
-    if (all(!is.na(status.int)) && all(status.int == as.integer(status.good))) {
+    if (isTRUE(all(!is.na(status.int))) && isTRUE(all(status.int == as.integer(status.good)))) {
       return("This project has good marks in all categories and is fully analysed.")
     }
     res <- list()

@@ -72,6 +72,17 @@ widgetbase.output.selectview <- function(w, id) {
   inputView.id.local <- paste(id, "_selectedview",sep="")
   title <- div(id = w$titleid, class = "shiny-text-output widget_title")
 
+  # Ensure selected is properly formatted for selectInput
+  # Check conditions separately to avoid logical coercion issues
+  has_selected <- !is.null(myselected)
+  has_length <- isTRUE(has_selected) && isTRUE(length(myselected) > 0)
+  
+  if (isTRUE(has_selected) && isTRUE(has_length)) {
+    myselected <- as.character(myselected)
+  } else {
+    myselected <- NULL
+  }
+
   selector <- selectInput(inputView.id.local, "",
                                 choices = mychoices,
                                 selected = myselected)
@@ -121,7 +132,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
     ## Used to link from specific topic to the detail page
     if (!is.null(widget.class$detailpage$name)) {
       name <- widget.class$detailpage$name
-      link <- paste("../details/?projectid=", isolate(pid()), "&widget=", name, "&topic=", isolate({topic()}), sep="")
+      link <- paste("../details?projectid=", isolate(pid()), "&widget=", name, "&topic=", isolate({topic()}), sep="")
       
       ## TODO use a details icon instead
       detail.link <- a(class="link_details", href=link, "")
@@ -132,7 +143,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
       ## Used to link from project-specific overview to a
       ## category (for instance, to collaboration)
       app <- widget.class$detailpage$app
-      link <- paste("../", app, "/?projectid=", isolate(pid()), "&topic=",
+      link <- paste("../", app, "?projectid=", isolate(pid()), "&topic=",
                     widget.class$detailpage$topic, sep="")
       
       detail.link <- a(class="link_details", href=link, "")
@@ -423,7 +434,7 @@ shinyServer(function(input, output, session) {
     ## Button input returns widget configuration as JSON
     cjson <- input$gridsterActionMenu
     #loginfo(paste("Got input from button:",cjson))
-    if (!is.null(cjson) && isValidJSON(cjson,TRUE)) {
+    if (isTRUE(!is.null(cjson)) && isValidJSON(cjson,TRUE)) {
       ## Create an R list object (unnamed) from JSON
       ## The first element is either "save" or "update". If it is "save", the
       ## configuration should be saved to file, otherwise only the displayed
@@ -435,7 +446,7 @@ shinyServer(function(input, output, session) {
       widget.config <- list(widgets=widgets.displayed)
 
       ## Save this configuration as a .config file
-      if (save.or.update == "save" && (!is.null(pid()) || (topic() == "testall"))) {
+      if (isTRUE(save.or.update == "save") && (isTRUE(!is.null(pid())) || isTRUE(topic() == "testall"))) {
         ## update configuration file
         ## TODO: save as cookie
         #widget.config$content <- widget.content
@@ -457,7 +468,7 @@ shinyServer(function(input, output, session) {
     widget.classname <- isolate({input$addwidget.class.name})
 
     ## check for null and empty string, because initially this could be delivered
-    if (!is.null(widget.classname) && length(widget.classname) > 0) {
+    if (!is.null(widget.classname) && isTRUE(length(widget.classname) > 0)) {
       ## Get a unique ID for the new widget
       id <- getuniqueid(prefix="widget")
 

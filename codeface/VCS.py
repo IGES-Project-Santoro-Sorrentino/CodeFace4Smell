@@ -1377,11 +1377,8 @@ class gitVCS (VCS):
         output = execute_command(cmd).splitlines()
 
         # parse ctags
-        try:
-            tags = CTags(tag_file.name)
-        except:
-            log.critical("failure to load ctags file")
-            raise Error("failure to load ctags file")
+        from ctags import CTags, TagEntry
+        tags = CTags(tag_file.name)
 
         # locate line numbers and structure names
         entry = TagEntry()
@@ -1444,7 +1441,7 @@ class gitVCS (VCS):
         # setup temp file
         # generate a source code file from the file_layout_src dictionary
         # and save it to a temporary location
-        srcFile = tempfile.NamedTemporaryFile(suffix=fileExt)
+        srcFile = tempfile.NamedTemporaryFile(suffix=fileExt, mode='w')
         for line in file_layout_src:
             srcFile.write(line)
         srcFile.flush()

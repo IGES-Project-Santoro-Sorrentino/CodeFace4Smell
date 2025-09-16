@@ -205,8 +205,19 @@ figure.of.merit.complexity <- function(pid) {
                                        "NOT(name='understand_raw') AND ",
                                        "projectId=", pid))
 
+  ## If no plots found, check if we have raw understand data
   if (nrow(understand.plots) == 0) {
-    return(list(status=status.error, why="No complexity analysis plots were found.")) # Cannot return figure of merit if no complexity analysis was done
+    ## Check if we have any complexity data at all (from understand_raw or other sources)
+    complexity.data <- dbGetQuery(conf$con,
+                                  str_c("SELECT COUNT(*) as count FROM understand_raw WHERE ",
+                                        "plotId IN (SELECT id FROM plots WHERE projectId=", pid, 
+                                        " AND name='understand_raw')"))
+    
+    if (complexity.data$count > 0) {
+      return(list(status=status.warn, why="Complexity analysis data is available but time series plots have not been generated yet. Please run the time series analysis."))
+    } else {
+      return(list(status=status.error, why="No complexity analysis data was found."))
+    }
   }
 
   ## Do a linear fit over the last year
