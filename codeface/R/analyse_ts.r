@@ -698,6 +698,63 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
 #  print(g)
 }
 
+# Ensure "Release TS distance" exists and is populated
+ensure_release_distance_timeseries <- function(con, project_id) {
+  # Crea il plot
+  plot_row <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT id, name FROM plots WHERE projectId=%d AND name='Release TS distance' LIMIT 1;",
+      as.integer(project_id)
+    )
+  )
+  if (nrow(plot_row) == 0) {
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "INSERT INTO plots (name, projectId, releaseRangeId, labelx, labely)
+         VALUES ('Release TS distance', %d, NULL, 'Date', 'Days between releases');",
+        as.integer(project_id)
+      )
+    )
+    plot_row <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT id, name FROM plots WHERE projectId=%d AND name='Release TS distance' LIMIT 1;",
+        as.integer(project_id)
+      )
+    )
+  }
+  plot_id <- plot_row$id[[1]]
+
+  # Controlla se ci sono già punti (evita duplicati)
+  n_points <- DBI::dbGetQuery(
+    con,
+    sprintf("SELECT COUNT(*) AS n FROM timeseries WHERE plotId=%d;", as.integer(plot_id))
+  )$n[[1]]
+
+  # Se vuoto, popola dalla vista revisions_view
+  if (is.na(n_points) || n_points == 0) {
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "INSERT INTO timeseries (plotId, time, value, value_scaled)
+         SELECT %d AS plotId,
+                date_end AS time,
+                DATEDIFF(date_end, date_start) AS value,
+                DATEDIFF(date_end, date_start) AS value_scaled
+         FROM revisions_view
+         WHERE projectId=%d
+           AND date_start IS NOT NULL
+           AND date_end   IS NOT NULL
+         ORDER BY date_end;",
+        as.integer(plot_id), as.integer(project_id)
+      )
+    )
+  }
+}
+
+
 ## Perform analyses that concern the per-release structure of projects
 do.release.analysis <- function(resdir, graphdir, conf) {
   tryCatch({
@@ -904,6 +961,9 @@ config.script.run({
 
   do.release.analysis(resdir, graphdir, conf)
   logdevinfo("-> Finished release analysis", logger="analyse_ts")
+
+  # Fallback: Se il plot "Release TS distance" è vuoto, riempilo da revisions_view
+  ensure_release_distance_timeseries(conf$con, conf$pid)
 
   do.update.timezone.information(conf, conf$pid)
   logdevinfo("-> Finished time zone analysis", logger="analyse_ts")
