@@ -17,6 +17,7 @@
 ## All Rights Reserved.
 
 source("../../ts_utils.r")
+library(ggplot2)
 
 ## Generate commity activity punch card datasets for all cycles
 ## of a given project

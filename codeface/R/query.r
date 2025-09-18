@@ -371,14 +371,34 @@ query.cluster.members <- function(con, cluster.id, prank=FALSE, technique=0) {
 ## Query an edgelist for a given cluster. Note that for single-contributor
 ## clusters, there are no edges, so we need to take this case into account.
 query.cluster.edges <- function(con, cluster.id) {
-  dat <- dbGetQuery(con, str_c("SELECT * FROM ",
-                               "edgelist WHERE clusterId=", cluster.id))
-
-  if (dim(dat)[1] > 0) {
-    return(dat[,c("fromId", "toId", "weight")])
-  } else {
+  # Check if cluster.id is valid
+  if (is.null(cluster.id) || is.na(cluster.id) || cluster.id == "") {
     return(NULL)
   }
+  
+  tryCatch({
+    dat <- dbGetQuery(con, str_c("SELECT * FROM ",
+                                 "edgelist WHERE clusterId=", cluster.id))
+    
+    # Check if we have data and the expected columns
+    if (is.null(dat) || nrow(dat) == 0) {
+      return(NULL)
+    }
+    
+    # Check if the required columns exist
+    required.cols <- c("fromId", "toId", "weight")
+    if (!all(required.cols %in% colnames(dat))) {
+      logwarn(paste("Missing required columns in edgelist for cluster", cluster.id, 
+                    ". Expected:", paste(required.cols, collapse=", "), 
+                    ". Found:", paste(colnames(dat), collapse=", ")))
+      return(NULL)
+    }
+    
+    return(dat[,required.cols])
+  }, error = function(e) {
+    logwarn(paste("Error querying cluster edges for cluster", cluster.id, ":", e$message))
+    return(NULL)
+  })
 }
 
 ## Query the per-cluster, per-person statistics for a given cluster id

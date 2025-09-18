@@ -1,3 +1,12 @@
-# This file is intentionally left empty
-# The dashboard uses server.r and ui.r directly
-# Error fixes are loaded directly in server.r
+# CodeFace Dashboard App
+# Main entry point for the dashboard application
+
+# Source the global configuration
+source("global.r")
+
+# Source the UI and server
+source("ui.r")
+source("server.r")
+
+# Run the Shiny app
+shinyApp(ui = ui, server = server)

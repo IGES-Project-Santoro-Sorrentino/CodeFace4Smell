@@ -158,7 +158,15 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
           choices <- listViews(w)()
           if (length(choices) > 1) {
             title <- if(project == pid()) { "View:" } else { paste("View (", project.title, "):", sep="") }
-            list(selectInput(paste("view", project, sep=""), title, choices=choices))
+            # Ensure choices are properly formatted for selectInput
+            # Convert named vector to named list for selectInput
+            if (is.null(names(choices))) {
+              choices_list <- as.list(choices)
+              names(choices_list) <- choices
+            } else {
+              choices_list <- as.list(choices)
+            }
+            list(selectInput(paste("view", project, sep=""), title, choices=choices_list, selected=NULL))
           } else {
             list()
           }

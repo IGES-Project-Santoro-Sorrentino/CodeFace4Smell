@@ -139,7 +139,7 @@ load.config <- function(global.file, project.file=NULL) {
 }
 
 ## Set the default codeface conf relative to this file
-default.codeface.conf <- "/codeface/conf/codeface.conf"
+default.codeface.conf <- "/codeface/codeface.conf"
 ## Set the default log file
 default.codeface.log <- str_c(normalizePath("../../log"), "/codeface.log.R.", Sys.getpid())
 

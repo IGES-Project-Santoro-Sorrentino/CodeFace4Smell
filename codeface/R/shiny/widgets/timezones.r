@@ -143,8 +143,9 @@ listViews.widget.timezones.test2 <- function(w) {
 createWidgetClass(
   "widget.timezones.commits",
   "Developer commit timezones", "Timezones where commits were made",
-  NULL,
-  2, 1
+  c("overview"),
+  2, 1,
+  detailpage=list(app="timezones", topic="overview")
 )
 
 ## Extract timezone information from commits

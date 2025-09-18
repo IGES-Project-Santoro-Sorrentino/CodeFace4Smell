@@ -17,6 +17,16 @@ RUN apt-get update && \
     software-properties-common \
     dirmngr \
     apt-transport-https \
+    dos2unix \
+    perl \
+    nginx \
+    texlive-latex-base \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-luatex \
+    texlive-xetex \
+    texlive-latex-recommended \
+    sloccount \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test \
@@ -57,7 +67,6 @@ RUN bash integration-scripts/install_codeface_R.sh
 
 RUN bash integration-scripts/install_codeface_node.sh
 RUN bash integration-scripts/install_codeface_python.sh
-#RUN bash integration-scripts/install_cppstats.sh
 
 # # Set up the database
 COPY datamodel/ datamodel/
@@ -69,19 +78,19 @@ RUN chmod +x rpackages/*.R
 RUN bash rpackages/install_cran_packages.sh
 RUN Rscript rpackages/install_cran_packages.R
 
-#RUN Rscript rpackages/install_cran_packages.R
 RUN Rscript rpackages/install_bioc_packages.R
 RUN Rscript rpackages/install_github_packages.R
+
+# Install Shiny packages for CodeFace dashboard
+RUN Rscript rpackages/install_shiny_packages.R
 
 COPY setup.py setup.py
 
 COPY . .
 
 # Contro CRLF e permessi
-RUN apt-get update && apt-get install -y --no-install-recommends dos2unix perl \
- && find /codeface -type f \( -name "*.sh" -o -name "*.r" -o -name "*.pl" \) -print0 | xargs -0 dos2unix -f \
- && chmod +x /codeface/codeface/R/*.r /codeface/codeface/R/cluster/*.r /codeface/codeface/perl/*.pl \
- && chmod +x /codeface/start_server.sh
+# RUN find /codeface -type f \( -name "*.sh" -o -name "*.r" -o -name "*.pl" \) -print0 | xargs -0 dos2unix -f \
+#  && chmod +x /codeface/codeface/R/*.r /codeface/codeface/R/cluster/*.r /codeface/codeface/perl/*.pl
 
 COPY cppstats /opt/cppstats
 RUN chmod +x /opt/cppstats/cppstats.py
@@ -93,9 +102,8 @@ RUN echo '#!/usr/bin/env bash\nexec python3 /opt/cppstats/cppstats.py "$@"' > /u
 
 # Preparo codeface dopo eseguito il login
 RUN chmod +x ./start_server.sh
-# RUN ./start_server.sh
 
 # Expose ports
-EXPOSE 22 8081 8100
+EXPOSE 22 8081 8100 3306
 # RUN service mysql start
 CMD ["/usr/sbin/sshd", "-D"]

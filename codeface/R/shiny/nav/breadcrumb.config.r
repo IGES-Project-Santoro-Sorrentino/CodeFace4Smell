@@ -84,7 +84,9 @@ detail.apps <- function(topic) {
 
 topic.ids <- c("basics", "communication", "construction", "complexity", "collaboration")
 
-project.apps.basics <- detail.apps("basics")
+project.apps.basics <- c(list(
+  c("timezones", "Developer timezones")
+), detail.apps("basics"))
 
 project.apps.communication <- c(list(
   c("timeseries", "Mailing list activity")

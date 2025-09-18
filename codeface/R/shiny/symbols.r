@@ -159,9 +159,9 @@ symbol.timeseries <- make.symbol(0x1f4c8) # chart
 symbol.basics <- make.symbol(0x1F481) # Information desk person
 #symbol.basics <- make.symbol(0x1F4ca) ## alternative: bar chart
 
-#symbol.communication <- make.symbol(0x1f4e1)
+symbol.communication <- make.symbol(0x1f4e1)
 #symbol.communication <- make.symbol(0x1f4ac) ## alternative communication, speech bubble
-symbol.communication <- make.symbol(0x1f5eb) ## alternative communication, speech bubble
+#symbol.communication <- make.symbol(0x1f5eb) ## alternative communication, speech bubble
 
 #symbol.collaboration <- make.symbol(0x21c4) ## alternative collaboration, arrows
 symbol.collaboration <- make.symbol(0x1f465) ## Two persons

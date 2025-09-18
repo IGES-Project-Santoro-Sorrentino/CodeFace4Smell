@@ -25,6 +25,7 @@ import signal
 import sys
 import traceback
 from collections import OrderedDict, namedtuple
+from datetime import datetime
 from glob import glob
 from math import sqrt
 from multiprocessing import Process, Queue, JoinableQueue, Lock
@@ -41,8 +42,12 @@ from datetime import timedelta, datetime
 BatchJobTuple = namedtuple('BatchJobTuple', ['id', 'func', 'args', 'kwargs',
         'deps', 'startmsg', 'endmsg'])
 class BatchJob(BatchJobTuple):
+    def __new__(cls, *args, **kwargs):
+        # Create the namedtuple instance using __new__
+        return super(BatchJob, cls).__new__(cls, *args)
+    
     def __init__(self, *args, **kwargs):
-        super(BatchJob, self).__init__(*args, **kwargs)
+        # Initialize additional attributes
         self.done = False
         self.submitted = False
 
@@ -350,36 +355,179 @@ def layout_graph(filename):
 def generate_report(start_rev, end_rev, resdir):
     log.devinfo("  -> Generating report")
     report_base = "report-{0}_{1}".format(start_rev, end_rev)
-
+    
+    # Check if we have any data files to include in the report
+    data_files = glob(os.path.join(resdir, "*.tex")) + glob(os.path.join(resdir, "*.pdf"))
+    if not data_files:
+        log.warning("No data files found for report generation, skipping LaTeX report")
+        return
+    
     # Run perl script to generate report LaTeX file
     cmd = []
     cmd.append(resource_filename(__name__, "perl/create_report.pl"))
     cmd.append(resdir)
     cmd.append("{0}--{1}".format(start_rev, end_rev))
-    with open(os.path.join(resdir, report_base + ".tex"), 'w') as f:
-        f.write(execute_command(cmd))
-
-    # Compile report with lualatex
-    cmd = []
-    cmd.append("lualatex")
-    cmd.append("-interaction=nonstopmode")
-    cmd.append(os.path.join(resdir, report_base + ".tex"))
-
-    # We run latex in a temporary directory so that it's easy to
-    # get rid of the log files etc. created during the run that are
-    # not relevant for the final result
+    
+    try:
+        tex_content = execute_command(cmd)
+        tex_file_path = os.path.join(resdir, report_base + ".tex")
+        with open(tex_file_path, 'w', encoding='utf-8') as f:
+            f.write(tex_content)
+        log.info("Generated LaTeX file: {0}".format(tex_file_path))
+    except Exception as e:
+        log.error("Failed to generate LaTeX file: {0}".format(str(e)))
+        return
+    
+    # Determine LaTeX engine
+    latex_engine = None
+    try:
+        execute_command(["pdflatex", "--version"], ignore_errors=True, silent_errors=True)
+        latex_engine = "pdflatex"
+    except:
+        try:
+            execute_command(["lualatex", "--version"], ignore_errors=True, silent_errors=True)
+            latex_engine = "lualatex"
+        except:
+            log.warning("No LaTeX engine available (pdflatex or lualatex), skipping PDF generation")
+            return
+    
+    log.info("Using LaTeX engine: {0}".format(latex_engine))
+    
+    # We run latex in a temporary directory
     orig_wd = os.getcwd()
     tmpdir = mkdtemp()
-
     os.chdir(tmpdir)
-    execute_command(cmd, ignore_errors=True)
+    
     try:
-        shutil.copy(report_base + ".pdf", resdir)
-    except IOError:
-        log.warning("Could not copy report PDF (missing input data?)")
+        # Copy the .tex file to temp directory
+        shutil.copy(os.path.join(resdir, report_base + ".tex"), ".")
+        
+        # Copy all potentially referenced files
+        for pattern in ["*.tex", "*.pdf", "*.png", "*.jpg", "*.jpeg", "*.gif"]:
+            for file_path in glob(os.path.join(resdir, pattern)):
+                try:
+                    shutil.copy(file_path, ".")
+                    log.debug("Copied file: {0}".format(os.path.basename(file_path)))
+                except Exception as copy_error:
+                    log.warning("Could not copy file {0}: {1}".format(file_path, str(copy_error)))
+        
+        # Clean up any existing auxiliary files
+        for ext in [".aux", ".log", ".fls", ".fdb_latexmk", ".synctex.gz"]:
+            aux_file = report_base + ext
+            if os.path.exists(aux_file):
+                os.remove(aux_file)
+        
+        # Build LaTeX command - REMOVED -halt-on-error to see actual errors
+        cmd = [latex_engine, "-interaction=nonstopmode", report_base + ".tex"]
+        
+        log.info("Running LaTeX command: {0}".format(" ".join(cmd)))
+        
+        # First attempt
+        try:
+            result = execute_command(cmd, ignore_errors=True)
+            log.debug("LaTeX first run completed")
+            
+            # Check if PDF was generated
+            if os.path.exists(report_base + ".pdf"):
+                shutil.copy(report_base + ".pdf", resdir)
+                log.info("Report PDF generated successfully: {0}".format(report_base + ".pdf"))
+                return
+            else:
+                log.warning("PDF not generated on first attempt")
+        
+        except Exception as latex_error:
+            log.warning("LaTeX execution failed: {0}".format(str(latex_error)))
+        
+        # Analyze the LaTeX log file for specific errors
+        log_file = report_base + ".log"
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                log_content = f.read()
+                
+            # Extract meaningful error messages
+            error_patterns = [
+                r"^! (.+)$",  # LaTeX errors starting with !
+                r"^l\.\d+ (.+)$",  # Line-specific errors
+                r"Fatal error",
+                r"Emergency stop",
+                r"File.*not found",
+                r"Undefined control sequence"
+            ]
+            
+            errors_found = []
+            for line in log_content.splitlines():
+                for pattern in error_patterns:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        errors_found.append(line.strip())
+                        if len(errors_found) >= 5:  # Limit to first 5 errors
+                            break
+                if len(errors_found) >= 5:
+                    break
+            
+            if errors_found:
+                log.warning("LaTeX compilation errors found:")
+                for error in errors_found:
+                    log.warning("  -> {0}".format(error))
+            else:
+                log.warning("No specific errors found in log, showing last part of log:")
+                log_lines = log_content.splitlines()
+                for line in log_lines[-10:]:  # Last 10 lines
+                    if line.strip():
+                        log.warning("  -> {0}".format(line.strip()))
+        
+        else:
+            log.warning("No log file generated by LaTeX")
+        
+        # Try a second run (sometimes fixes reference issues)
+        log.info("Attempting second LaTeX run...")
+        try:
+            result = execute_command(cmd, ignore_errors=True)
+            if os.path.exists(report_base + ".pdf"):
+                shutil.copy(report_base + ".pdf", resdir)
+                log.info("Report PDF generated successfully on second run: {0}".format(report_base + ".pdf"))
+                return
+        except Exception as second_error:
+            log.warning("Second LaTeX run also failed: {0}".format(str(second_error)))
+        
+        # Final attempt with minimal document
+        log.info("Attempting to create minimal test document...")
+        minimal_tex = """\\documentclass{article}
+                \\usepackage[utf8]{inputenc}
+                \\begin{document}
+                \\title{Test Report for {0}--{1}}
+                \\author{Codeface Analysis}
+                \\date{\\today}
+                \\maketitle
 
-    os.chdir(orig_wd)
-    shutil.rmtree(tmpdir)
+                \\section{Report Generation Failed}
+                The full report could not be generated due to LaTeX compilation errors.
+                This is a minimal fallback document.
+
+                \\section{Attempted Analysis Period}
+                From: {0}\\\\
+                To: {1}\\\\
+                Directory: {2}
+        \\end{document}""".format(start_rev, end_rev, resdir)
+        
+        with open("minimal_" + report_base + ".tex", 'w') as f:
+            f.write(minimal_tex)
+        
+        minimal_cmd = [latex_engine, "-interaction=nonstopmode", "minimal_" + report_base + ".tex"]
+        try:
+            execute_command(minimal_cmd, ignore_errors=True)
+            if os.path.exists("minimal_" + report_base + ".pdf"):
+                shutil.copy("minimal_" + report_base + ".pdf", os.path.join(resdir, "minimal_" + report_base + ".pdf"))
+                log.info("Minimal fallback report generated: minimal_{0}.pdf".format(report_base))
+        except:
+            log.warning("Even minimal document failed to compile")
+        
+    except Exception as e:
+        log.warning("Could not generate report PDF: {0}".format(str(e)))
+    
+    finally:
+        os.chdir(orig_wd)
+        shutil.rmtree(tmpdir)
+
 
 def generate_reports(start_rev, end_rev, range_resdir):
     files = glob(os.path.join(range_resdir, "*.dot"))

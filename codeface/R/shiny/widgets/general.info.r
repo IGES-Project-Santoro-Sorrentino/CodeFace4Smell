@@ -87,7 +87,7 @@ createWidgetClass(
     )
     )
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commits <- function(w) {
@@ -144,7 +144,7 @@ createWidgetClass(
              "data-max"=200,
              style="width:260px; height:200px")
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commitspeed <- function(w) {
@@ -224,7 +224,7 @@ createWidgetClass(
     )
     )
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 renderWidget.widget.gauge.current.cycle <- function(w) {
@@ -261,7 +261,7 @@ createWidgetClass(
              "data-max"=200,
              style="width:260px; height:200px")
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commits.per.cycle <- function(w) {

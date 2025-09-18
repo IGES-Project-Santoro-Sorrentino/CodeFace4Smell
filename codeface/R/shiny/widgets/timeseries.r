@@ -41,8 +41,35 @@ initWidget.widget.timeseries.messages.per.day <- function(w) {
 
 renderWidget.widget.timeseries.messages.per.day <- function(w) {
   renderPlot({
-    name <- w$plots()$name[[which(w$plots()$id==w$view())]]
+    plots_data <- w$plots()
+    if (is.null(plots_data) || nrow(plots_data) == 0) {
+      # No data available - show empty plot with message
+      plot(1, type="n", xlab="Time", ylab="Messages per Day", 
+           main="No mailing list data available", 
+           xlim=c(0,1), ylim=c(0,1))
+      text(0.5, 0.5, "No mailing list activity data found for this project", cex=1.2)
+      return()
+    }
+    
+    # Check if the selected view exists
+    view_id <- w$view()
+    if (is.null(view_id) || !view_id %in% plots_data$id) {
+      # Use the first available plot if view is invalid
+      view_id <- plots_data$id[1]
+    }
+    
+    name <- plots_data$name[[which(plots_data$id == view_id)]]
     ts <- get.ts.data(conf$con, w$pid(), name)
+    
+    if (is.null(ts) || nrow(ts) == 0) {
+      # No time series data available
+      plot(1, type="n", xlab="Time", ylab="Messages per Day", 
+           main="No time series data available", 
+           xlim=c(0,1), ylim=c(0,1))
+      text(0.5, 0.5, "No time series data found for this project", cex=1.2)
+      return()
+    }
+    
     print(do.ts.plot(ts, w$boundaries(), name, "Messages per Day", w$smooth.or.def(), w$transform.or.def()))
   })
 }
