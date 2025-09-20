@@ -20,6 +20,7 @@ from time import sleep
 from random import random
 from codeface.util import BatchJobPool
 from os import unlink
+from tempfile import NamedTemporaryFile
 
 def test_function(i):
     sleep(0.05*random())
@@ -93,7 +94,7 @@ class Testpool(unittest.TestCase):
         try:
             pool.join()
         except Exception as e:
-            self.assertIn("IOError", str(e))
+            self.assertIn("FileNotFoundError", str(e))
             raised = True
         self.assertEqual(raised, True)
 
