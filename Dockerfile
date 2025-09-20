@@ -88,12 +88,16 @@ COPY setup.py setup.py
 
 COPY . .
 
-# Contro CRLF e permessi
-# RUN find /codeface -type f \( -name "*.sh" -o -name "*.r" -o -name "*.pl" \) -print0 | xargs -0 dos2unix -f \
-#  && chmod +x /codeface/codeface/R/*.r /codeface/codeface/R/cluster/*.r /codeface/codeface/perl/*.pl
+# Contro CRLF e permessi (esteso ai conf/env/nginx)
+RUN find /codeface -type f \( \
+      -iname "*.sh" -o -iname "*.r" -o -iname "*.pl" -o \
+      -iname "*.conf" -o -iname "*.env" -o -iname "*.ini" -o \
+      -iname "*.cfg" -o -iname "*.service" -o -iname "*.socket" -o \
+      -path "*/nginx/*.conf" \
+    \) -print0 | xargs -0 dos2unix -f \
+ && chmod +x /codeface/codeface/R/*.r /codeface/codeface/R/cluster/*.r /codeface/codeface/perl/*.pl \
+ && chmod +x /codeface/deploy-shiny-nginx.sh
 
-COPY cppstats /opt/cppstats
-RUN chmod +x /opt/cppstats/cppstats.py
 
 # RUN bash integration-scripts/install_cppstats.sh
 
