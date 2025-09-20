@@ -1,0 +1,4 @@
+/* Fix breadcrumb dropdown separator issue */
+.breadcrumb > li + li:before {
+	content: none !important;
+}

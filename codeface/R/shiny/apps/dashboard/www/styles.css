@@ -149,7 +149,4 @@ div .shiny-plot-output {
 	overflow: hidden;
 }
 
-/* Fix breadcrumb dropdown separator issue */
-.breadcrumb .dropdown-menu li:before {
-	content: none !important;
-}
+
