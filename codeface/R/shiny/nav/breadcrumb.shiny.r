@@ -291,13 +291,6 @@ compareWithProjectsOutput <- function( outputId ) {
 ## server.r function to render the output elements
 ##
 chosenSelectInput <- function(inputId, label, choices, multiple=FALSE, selected=NULL, options = list()) {
-  # Debug output
-  cat("DEBUG chosenSelectInput:\n")
-  cat("  inputId:", inputId, "\n")
-  cat("  label length:", length(label), "- value:", label, "\n")
-  cat("  choices length:", length(choices), "\n")
-  cat("  selected length:", if(is.null(selected)) 0 else length(selected), "\n")
-  cat("  multiple:", multiple, "\n")
   
   # Ensure label is a single value
   if (length(label) > 1) {
@@ -308,7 +301,7 @@ chosenSelectInput <- function(inputId, label, choices, multiple=FALSE, selected=
   # Safe handling of selected parameter
   # Check conditions separately to avoid logical coercion issues
   has_selected <- !is.null(selected)
-  is_vector <- isTRUE(has_selected) && is.vector(selected)
+  is_vector <- isTRUE(has_selected) && isTRUE(is.vector(selected))
   has_length <- isTRUE(is_vector) && isTRUE(length(selected) > 0)
   
   if (isTRUE(has_selected) && isTRUE(is_vector) && isTRUE(has_length)) {

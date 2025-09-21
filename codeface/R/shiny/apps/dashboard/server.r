@@ -73,14 +73,14 @@ widgetbase.output.selectview <- function(w, id) {
   title <- div(id = w$titleid, class = "shiny-text-output widget_title")
 
   # Ensure selected is properly formatted for selectInput
-  # Check conditions separately to avoid logical coercion issues
-  has_selected <- !is.null(myselected)
-  has_length <- isTRUE(has_selected) && isTRUE(length(myselected) > 0)
-  
-  if (isTRUE(has_selected) && isTRUE(has_length)) {
+  # Fix the logical coercion issue by ensuring selected is a single value
+  if (is.null(myselected) || length(myselected) == 0) {
+    myselected <- NULL
+  } else if (length(myselected) == 1) {
     myselected <- as.character(myselected)
   } else {
-    myselected <- NULL
+    # If multiple values, take the first one
+    myselected <- as.character(myselected[1])
   }
 
   selector <- selectInput(inputView.id.local, "",
@@ -343,14 +343,17 @@ shinyServer(function(input, output, session) {
       }
       cls <- widget.list[[cls.name]]
       widget.config <- list(
-        widgets=lapply(projects.list$id, function(pid) {
-          w <- list(col = 1, row = 1,
+        widgets=lapply(seq_along(projects.list$id), function(i) {
+          pid <- projects.list$id[i]
+          # Position widgets in a grid: each widget gets its own column
+          w <- list(col = i, row = 1,
                size_x = cls$size.x, size_y = cls$size.y,
-               id = paste("widget",pid,sep=""),
+               id = paste("widget",pid,"_",cls.name,sep=""),
                cls = cls.name,
                pid = pid)
           #force(w)
           #str(w)
+          cat("DEBUG: Widget config for project", pid, "-> ID:", w$id, "Position: (", w$col, ",", w$row, ")\n")
           w
         })
       )
@@ -417,6 +420,7 @@ shinyServer(function(input, output, session) {
     
     ## Build widget using the widgetbase.output builder
     loginfo(paste("Creating widget from config: ", w$id, "for classname: ", w$cls ))
+    cat("DEBUG: Creating widget with ID:", w$id, "for project:", w$pid, "at position (", w$col, ",", w$row, ")\n")
     widget.classname <- as.character(w$cls)
     widget.class <- widget.list[[widget.classname]]
 
@@ -425,7 +429,46 @@ shinyServer(function(input, output, session) {
 
     ## Send a custom message to Shiny client for adding the base widget
     sendWidgetContent(session, widgetbase)
+    cat("DEBUG: Sent widget", w$id, "to client\n")
   } # end for
+
+  ## Create widgets for selected projects (comparison widgets)
+  observe({
+    selected.pids.value <- selected.pids()
+    if (length(selected.pids.value) > 0) {
+      loginfo(paste("Creating comparison widgets for selected projects:", paste(selected.pids.value, collapse=", ")))
+      
+      for (selected.pid in selected.pids.value) {
+        # Skip if this is the current project (already handled above)
+        if (!is.null(pid()) && as.character(selected.pid) == as.character(pid())) {
+          next
+        }
+        
+        # Create widgets for this selected project
+        for (w in isolate(initial.widget.config())$widgets) {
+          widget.classname <- as.character(w$cls)
+          widget.class <- widget.list[[widget.classname]]
+          
+          # Create a unique ID for the comparison widget
+          comparison.id <- paste("comparison_widget", selected.pid, w$id, sep="_")
+          
+          # Position comparison widgets in a separate row to avoid overlap
+          comparison.col <- w$col
+          comparison.row <- w$row + 1
+          
+          # Create reactive PID for this selected project
+          this.pid <- reactive({as.numeric(selected.pid)})
+          
+          # Build widget using the widgetbase.output builder
+          loginfo(paste("Creating comparison widget:", comparison.id, "for project:", selected.pid))
+          widgetbase <- widgetbase.output(input, output, comparison.id, widget.class, topic, this.pid, w$size_x, w$size_y, comparison.col, comparison.row, selected.pids)
+          
+          # Send a custom message to Shiny client for adding the comparison widget
+          sendWidgetContent(session, widgetbase)
+        }
+      }
+    }
+  })
 
   ##
   ## Observe the gridster action menu save button (see also: nav/gidsterWidgetExt.js)

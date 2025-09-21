@@ -483,7 +483,7 @@ def get_feature_lines_from_file(file_layout_src, filename):
     fileExt = os.path.splitext(filename)[1]
 
     # temporary file where we write transient data needed for cppstats
-    srcFile = tempfile.NamedTemporaryFile(suffix=fileExt, delete=False)
+    srcFile = tempfile.NamedTemporaryFile(suffix=fileExt, delete=False, mode='w')
     featurefile = tempfile.NamedTemporaryFile(suffix=".csv")
     # generate a source code file from the file_layout_src dictionary
     # and save it to a temporary location

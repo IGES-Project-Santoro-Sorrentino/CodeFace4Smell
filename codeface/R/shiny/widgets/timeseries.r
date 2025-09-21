@@ -42,7 +42,7 @@ initWidget.widget.timeseries.messages.per.day <- function(w) {
 renderWidget.widget.timeseries.messages.per.day <- function(w) {
   renderPlot({
     plots_data <- w$plots()
-    if (is.null(plots_data) || nrow(plots_data) == 0) {
+    if (is.null(plots_data) || (nrow(plots_data) == 0)) {
       # No data available - show empty plot with message
       plot(1, type="n", xlab="Time", ylab="Messages per Day", 
            main="No mailing list data available", 
@@ -53,7 +53,7 @@ renderWidget.widget.timeseries.messages.per.day <- function(w) {
     
     # Check if the selected view exists
     view_id <- w$view()
-    if (is.null(view_id) || !view_id %in% plots_data$id) {
+    if (is.null(view_id) || (!view_id %in% plots_data$id)) {
       # Use the first available plot if view is invalid
       view_id <- plots_data$id[1]
     }
@@ -61,7 +61,7 @@ renderWidget.widget.timeseries.messages.per.day <- function(w) {
     name <- plots_data$name[[which(plots_data$id == view_id)]]
     ts <- get.ts.data(conf$con, w$pid(), name)
     
-    if (is.null(ts) || nrow(ts) == 0) {
+    if (is.null(ts) || (nrow(ts) == 0)) {
       # No time series data available
       plot(1, type="n", xlab="Time", ylab="Messages per Day", 
            main="No time series data available", 

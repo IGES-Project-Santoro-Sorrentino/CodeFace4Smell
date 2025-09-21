@@ -26,7 +26,7 @@ source("../../clusters.r")
 
 gen.clusters.list <- function(l, con) {
   # Check if we have valid cluster IDs
-  if (is.null(l) || length(l) == 0) {
+  if (is.null(l) || (length(l) == 0)) {
     return(list())
   }
   
@@ -34,7 +34,7 @@ gen.clusters.list <- function(l, con) {
     cluster.id <- l[[i]]
     
     # Check if cluster.id is valid
-    if (is.null(cluster.id) || is.na(cluster.id) || cluster.id == "") {
+    if (is.null(cluster.id) || is.na(cluster.id) || (cluster.id == "")) {
       return(NULL)
     }
     
@@ -93,7 +93,7 @@ prepare.clusters <- function(con, pid, range.id) {
     l <- query.cluster.ids.con(con, pid, range.id, "Spin Glass Community")
     
     # Check if we have any cluster IDs
-    if (is.null(l) || length(l) == 0) {
+    if (is.null(l) || (length(l) == 0)) {
       logwarn(paste("No cluster IDs found for project", pid, "range", range.id))
       return(list())
     }
@@ -101,7 +101,7 @@ prepare.clusters <- function(con, pid, range.id) {
     clusters.list <- gen.clusters.list(l, con)
     
     # Check if we have any valid clusters
-    if (is.null(clusters.list) || length(clusters.list) == 0) {
+    if (is.null(clusters.list) || (length(clusters.list) == 0)) {
       logwarn(paste("No valid clusters found for project", pid, "range", range.id))
       return(list())
     }
@@ -123,7 +123,7 @@ prepare.clusters <- function(con, pid, range.id) {
 }
 
 do.cluster.plots <- function(clusters.list) {
-  if (is.null(clusters.list) || length(clusters.list) == 0) {
+  if (is.null(clusters.list) || (length(clusters.list) == 0)) {
     # No clusters available - show empty plot with message
     plot(1, type="n", xlab="", ylab="", main="No collaboration clusters available", 
          xlim=c(0,1), ylim=c(0,1), axes=FALSE)
@@ -202,7 +202,7 @@ initWidget.widget.clusters.correlations <- function(w) {
 renderWidget.widget.clusters.correlations <- function(w) {
   renderPlot({
     dat <- w$dat()
-    if (is.null(dat) || nrow(dat) == 0) {
+    if (is.null(dat) || (nrow(dat) == 0)) {
       # No data available - show empty plot with message
       plot(1, type="n", xlab="", ylab="", main="No collaboration data available", 
            xlim=c(0,1), ylim=c(0,1), axes=FALSE)
@@ -227,7 +227,7 @@ createWidgetClass(
 renderWidget.widget.clusters.summary <- function(w, range.id=NULL) {
   renderTable({
     clusters <- w$cluster.list()
-    if (is.null(clusters) || length(clusters) == 0) {
+    if (is.null(clusters) || (length(clusters) == 0)) {
       return(data.frame(Message="No collaboration clusters found for this project"))
     }
     gen.cluster.summary(clusters)

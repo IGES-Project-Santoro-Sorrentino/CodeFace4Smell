@@ -56,12 +56,40 @@ common.server.init <- function(input, output, session, app.name) {
   choices <- projects.choices(projects.list)
 
   ## returns a reactive list containing selected projects
-  selected <- reactive({ projects.selected( projects.list, input$qacompareids) })
+  selected <- reactive({ 
+    # Get projects from cookie
+    cookie.projects <- projects.selected( projects.list, input$qacompareids)
+    
+    # Get current project from URL
+    current.project <- pid()
+    if (!is.null(current.project) && !is.na(as.numeric(current.project))) {
+      current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project)]
+      if (length(current.project.name) > 0) {
+        # Combine cookie projects with current project, removing duplicates
+        all.projects <- unique(c(cookie.projects, current.project.name))
+        return(all.projects)
+      }
+    }
+    
+    return(cookie.projects)
+  })
   selected.pids <- reactive({
-    if (is.null(input$qacompareids)) {
-      return(list()) }
-    else {
-      unlist(strsplit(input$qacompareids,",")) }
+    # Get project IDs from cookie
+    cookie.pids <- if (is.null(input$qacompareids)) {
+      list()
+    } else {
+      unlist(strsplit(input$qacompareids,","))
+    }
+    
+    # Get current project ID from URL
+    current.project <- pid()
+    if (!is.null(current.project) && !is.na(as.numeric(current.project))) {
+      # Combine cookie PIDs with current project, removing duplicates
+      all.pids <- unique(c(cookie.pids, as.character(current.project)))
+      return(all.pids)
+    }
+    
+    return(cookie.pids)
   })
 
   ## Create project comparison user interface
@@ -101,7 +129,7 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
     selected = allpids$selected  # to be used for comparisons
 
     observe({
-      if (!is.vector(pid())) {
+      if (!isTRUE(is.vector(pid()))) {
         stop("No projectid parameter in URL")
       } else if (is.na(as.numeric(pid()))) {
         stop("projectid URL parameter is empty")
@@ -190,9 +218,25 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
       if (!cls$compareable) {
         ## If the list of compared widgets changes, first make sure all widgets are there
         ## If we have projects to compare...
-        instance.ids <- reactive({lapply(selected(), function(project) {
-          make.or.reuse.widget(i, cls, project)
-        })})
+        instance.ids <- reactive({
+          # Get current project ID
+          current.project.id <- pid()
+          if (!is.null(current.project.id) && !is.na(as.numeric(current.project.id))) {
+            current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project.id)]
+            # Filter out the current project from selected projects to avoid duplicates
+            other.projects <- selected()[!selected() %in% current.project.name]
+          } else {
+            other.projects <- selected()
+          }
+          
+          lapply(other.projects, function(project) {
+            # Find project ID by name
+            project.id <- projects.list$id[projects.list$name == project]
+            if (length(project.id) > 0) {
+              make.or.reuse.widget(i, cls, project.id[1])
+            }
+          })
+        })
 
         output[[id]] <- renderUI({
           if (length(selected()) > 0) {

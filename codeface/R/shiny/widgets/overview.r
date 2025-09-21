@@ -295,7 +295,7 @@ widgetExplanation.widget.overview.project <- function(w) {
     
     # Safely extract status values and handle NULL cases
     status.list <- w$status()
-    if (is.null(status.list) || length(status.list) == 0) {
+    if (is.null(status.list) || (length(status.list) == 0)) {
       return("No status information available for this project.")
     }
     

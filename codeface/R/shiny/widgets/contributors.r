@@ -103,7 +103,7 @@ render.text.or.table <- function (expr, ..., text = "", env = parent.frame(),
     markRenderFunction(tableOutput, function() {
         classNames <- "data table table-bordered table-condensed"
         data <- func()
-        if (is.null(data) || identical(data, data.frame()))
+        if (is.null(data) || (identical(data, data.frame())))
             return(paste(utils::capture.output(cat(text)), collapse = "\n"))
         return(paste(utils::capture.output(print(xtable::xtable(data,
             ...), type = "html", html.table.attributes = paste("class=\"",

@@ -483,6 +483,7 @@ CREATE TABLE IF NOT EXISTS `codeface`.`plot_bin` (
   `plotID` BIGINT NOT NULL COMMENT '',
   `type` VARCHAR(45) NOT NULL COMMENT '',
   `data` LONGBLOB NOT NULL COMMENT '',
+  PRIMARY KEY (`plotID`),
   CONSTRAINT `plot_bin_plot_ref`
     FOREIGN KEY (`plotID`)
     REFERENCES `codeface`.`plots` (`id`)

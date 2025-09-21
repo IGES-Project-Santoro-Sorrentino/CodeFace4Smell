@@ -36,7 +36,7 @@ initWidget.widget.tagcloud.mlsubjects <- function(w) {
       result <- dbGetQuery(conf$con, str_c("SELECT subject, count FROM",
         " freq_subjects WHERE projectId=", w$pid(),
         " ORDER BY count DESC LIMIT 100"))
-      if (is.null(result) || nrow(result) == 0) {
+      if (is.null(result) || (nrow(result) == 0)) {
         return(data.frame(subject=character(0), count=integer(0)))
       }
       return(result)
@@ -47,7 +47,7 @@ initWidget.widget.tagcloud.mlsubjects <- function(w) {
   })
   w$frequencies <- reactive({
     d <- w$data()
-    if (is.null(d) || nrow(d) == 0 || length(d$subject) == 0) {
+    if (is.null(d) || (nrow(d) == 0) || (length(d$subject) == 0)) {
       return(list())
     }
     tryCatch({
@@ -75,7 +75,7 @@ initWidget.widget.tagcloud.mlsubjects <- function(w) {
     }
     tryCatch({
       tdm <- do.call(c, freqs_list)
-      if (is.null(tdm) || length(tdm) == 0) {
+      if (is.null(tdm) || (length(tdm) == 0)) {
         return(numeric(0))
       }
       row_sums(tdm)
@@ -92,7 +92,7 @@ renderWidget.widget.tagcloud.mlsubjects <- function(w) {
     v <- w$frequency()
     
     # Check if we have any frequency data
-    if (is.null(v) || length(v) == 0 || all(v == 0)) {
+    if (is.null(v) || (length(v) == 0) || all(v == 0)) {
       div.id <- paste("wordcloudcontainer", w$pid(), sep="")
       return(tagList(
         tags$div(id=div.id, style="margin-top: 20px; text-align: center; padding: 40px;"),

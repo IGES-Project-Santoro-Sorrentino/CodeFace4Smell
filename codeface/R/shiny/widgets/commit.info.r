@@ -111,7 +111,7 @@ initWidget.widget.commit.doc <- function(w) {
 
 renderWidget.widget.commit.doc <- function(w) {
   renderPlot({
-    if (is.null(w$dat()) || nrow(w$dat()) == 0) {
+    if (is.null(w$dat()) || (nrow(w$dat()) == 0)) {
       plot.new()
       text(0.5, 0.5, "No commit documentation data available", cex=1.2)
       title("Commit Documentation")

@@ -24,6 +24,7 @@ from shutil import copyfile
 from collections.abc import Mapping
 from logging import getLogger
 from codeface.linktype import LinkType
+from codeface import logger
 
 log = getLogger(__name__)
 from tempfile import NamedTemporaryFile
@@ -85,7 +86,8 @@ class Configuration(Mapping):
     def _load(self, filename):
         '''Helper function that checks loading errors and logs them'''
         try:
-            return yaml.load(open(filename))
+            with open(filename) as f:
+                return yaml.load(f, Loader=yaml.SafeLoader)
         except IOError:
             log.exception("Could not open configuration file '{}'".
                     format(filename))

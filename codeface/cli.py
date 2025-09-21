@@ -29,7 +29,7 @@ from glob import glob
 from codeface.logger import set_log_level, start_logfile, log
 from codeface.configuration import Configuration
 from codeface.util import execute_command
-from codeface.project import project_analyse, mailinglist_analyse, conway_analyse
+from codeface.project import project_analyse, mailinglist_analyse, sociotechnical_analyse, conway_analyse
 
 def get_parser():
     parser = argparse.ArgumentParser(prog='codeface',
@@ -96,6 +96,14 @@ def get_parser():
     ml_parser.add_argument('mldir',
                         help="Directory for mailing lists")
 
+    st_parser = sub_parser.add_parser('st', help='Run socio-technical analysis')
+    st_parser.set_defaults(func=cmd_st)
+    st_parser.add_argument('-c', '--config', help="Codeface configuration file",
+                           default='codeface.conf')
+    st_parser.add_argument('-p', '--project', help="Project configuration file",
+                           required=True)
+    st_parser.add_argument('resdir',
+                           help="Directory with communication and collaboration analysis results")
     conway_parser = sub_parser.add_parser('conway', help='Run conway (socio-technical) analysis')
     conway_parser.set_defaults(func=cmd_conway)
     conway_parser.add_argument('-c', '--config', help="Codeface configuration file",
@@ -142,6 +150,17 @@ def cmd_ml(args):
                         args.use_corpus)
     return 0
 
+def cmd_st(args):
+    '''Dispatch the ``st`` command.'''
+    # First make all the args absolute
+    resdir = os.path.abspath(args.resdir)
+    codeface_conf, project_conf = map(os.path.abspath, (args.config, args.project))
+    logfile = args.logfile
+    if logfile:
+        logfile = os.path.abspath(logfile)
+    sociotechnical_analyse(resdir, codeface_conf, project_conf,
+                           args.loglevel, logfile, args.jobs)
+    return 0
 def cmd_conway(args):
     '''Dispatch the ``conway`` command.'''
     # First make all the args absolute

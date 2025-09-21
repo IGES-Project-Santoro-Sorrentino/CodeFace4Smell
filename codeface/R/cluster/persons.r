@@ -455,7 +455,7 @@ save.group <- function(conf, .tags, .iddb, idx, .prank, .filename=NULL, label) {
   ## to thick with the number of commits
   V(g)$penwidth <- as.character(scale.data(log(.iddb$numcommits+1),1,5)[idx])
 
-  if(!is.na(label) && length(label) == 1) {
+  if(!isTRUE(is.na(label)) && length(label) == 1) {
     g$label <- label
     g$fontsize <- 30
   }
@@ -554,7 +554,7 @@ save.groups <- function(conf, .tags, .iddb, .comm, .prank.list, .basedir,
       idx <- as.vector(.comm[[i]])
     }
 
-    if (!is.na(baselabel) && length(baselabel) == 1) {
+    if (!isTRUE(is.na(baselabel)) && length(baselabel) == 1) {
       # Ensure comm.quality[i] is a single value, not a vector
       # Use the safe comm.quality value
       quality_val <- comm.quality_safe
@@ -573,13 +573,12 @@ save.groups <- function(conf, .tags, .iddb, .comm, .prank.list, .basedir,
                        filename.tr, label.tr)
 
     ## Store the cluster content into the database
-    if (!is.na(baselabel) && length(baselabel) == 1) {
+    if (!isTRUE(is.na(baselabel)) && length(baselabel) == 1) {
       store.graph.db(conf, baselabel, idx, .iddb, g.reg, g.tr, j)
       j <- j + 1
     }
   }
 }
-
 
 ## Determine which persons are in a community detection algorithm
 ## determined sub-community N
@@ -654,7 +653,7 @@ save.all <- function(conf, .tags, .iddb, .prank.list, .comm, .filename.base=NULL
     V(g.all.tr)[idx]$fillcolor <- col.to.hex("#", red[i+1], 0, 0)
   }
 
-  if (!is.na(label) && length(label) == 1) {
+  if (!isTRUE(is.na(label)) && length(label) == 1) {
     g.all.reg$label = label
     g.all.tr$label = label
 

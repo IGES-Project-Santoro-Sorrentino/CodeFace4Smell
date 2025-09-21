@@ -154,10 +154,10 @@ class BatchJobPool(object):
             # Terminate and join the workers
             # Wait 100ms to allow backtraces to be logged
             sleep(0.1)
-            log.devinfo("Terminating workers...")
+            log.info("Terminating workers...")
             for w in self.workers:
                 w.terminate()
-            log.devinfo("Workers terminated.")
+            log.info("Workers terminated.")
 
 def batchjob_worker_function(work_queue, done_queue):
     '''
@@ -244,6 +244,29 @@ signal.signal(signal.SIGINT, handle_sigint)
 signal.signal(signal.SIGTERM, handle_sigterm)
 # Also dump on sigusr1, but do not terminate
 signal.signal(signal.SIGUSR1, handle_sigusr1)
+
+def generate_report_st(stdir):
+    log.info("  -> Generating report")
+    # We run latex in a temporary directory so that it's easy to
+    # get rid of the log files etc. created during the run that are
+    # not relevant for the final result
+    orig_wd = os.getcwd()
+    tmpdir = mkdtemp()
+    os.chdir(tmpdir)
+    
+    # Compile reports with lualatex
+    cmd = []
+    cmd.append("lualatex")
+    cmd.append("-interaction=nonstopmode")
+    cmd.append(os.path.join(stdir, "report.tex"))
+    execute_command(cmd, ignore_errors=True)
+    try:
+        shutil.copy("report.pdf", stdir)
+    except IOError:
+        log.warning("Could not copy report PDF (missing input data?)")
+
+    os.chdir(orig_wd)
+    shutil.rmtree(tmpdir)
 
 def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None, silent_errors=False):
     '''
