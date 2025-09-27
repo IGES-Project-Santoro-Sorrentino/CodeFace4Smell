@@ -59,9 +59,15 @@ fit.plot.linear <- function(pid, name, period.in.days) {
   if (length(ts$time) < 2) {
     return(list(rel.increase.per.year=NA, sigma=NA))
   }
+  ## Check if we have enough variance in the data to perform a meaningful fit
+  if (length(unique(ts$value)) == 1) {
+    ## All values are the same - no trend can be detected
+    return(list(rel.increase.per.year=0, sigma=0, fit.value.now=ts$value[1]))
+  }
+  
   ## Fit with linear model
   m1 <- lm(value ~ time, ts)
-  s <- summary(m1)
+  s <- suppressWarnings(summary(m1))  # Suppress perfect fit warnings
   #print(paste("Fit to", name))
   #print(s)
   increase <- s$coefficients[[2]]
@@ -114,13 +120,21 @@ figure.of.merit.communication <- function(pid) {
                                str_c("SELECT COUNT(*) FROM mail_thread ",
 			       "WHERE projectId=", pid))[[1]]
 
+  ## If no mail_thread entries, check for mail entries as fallback
+  n.mail.entries <- 0
+  if (n.mail.threads == 0) {
+    n.mail.entries <- dbGetQuery(conf$con,
+                                 str_c("SELECT COUNT(*) FROM mail ",
+                                       "WHERE projectId=", pid))[[1]]
+  }
+
   ml.plots <-  dbGetQuery(conf$con,
                           str_c("SELECT id, name FROM plots ",
                                 "WHERE projectId=", pid,
 			        " AND releaseRangeId IS NULL ",
 				" AND name LIKE '% activity'"))
 
-  if (n.mail.threads == 0 || nrow(ml.plots) == 0) {
+  if ((n.mail.threads == 0 && n.mail.entries == 0) || nrow(ml.plots) == 0) {
     return(list(status=status.error, why="No mailing list to analyse."))
   }
 
@@ -145,6 +159,9 @@ figure.of.merit.communication <- function(pid) {
   ## We therefore set the magnitude to zero, meaning "no detectable change"
   inc[sigma < 5] <- 0.0
   ## Select the most active mailing list
+  if (length(val) == 0 || all(is.na(val))) {
+    return(list(status=status.error, why="No valid mailing list activity data found."))
+  }
   max.index <- which.max(val)
   max.plot <- ml.plots$name[max.index]
   increase.per.year <- inc[max.index]

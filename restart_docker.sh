@@ -11,4 +11,6 @@ fi
 
 docker run -dit --name codeface4smell -p 8080:8081 -p 8081:8081 -p 22:22 -p 3306:3306 codeface4smell
 
-docker exec -it codeface4smell bash -c "./start_server.sh && codeface -j8 run -c codeface.conf -p conf/qemu.conf results/ git-repos/ && ./deploy-shiny-nginx.sh; exec bash"
+docker exec -it codeface4smell bash -c "./start_server.sh && codeface -j8 run -c codeface.conf -p conf/qemu.conf results/ git-repos/ && codeface ml -c codeface.conf -p conf/qemu.conf git-repos/ mldir/ && ./deploy-shiny-nginx.sh; exec bash"
+
+# codeface ml -c codeface.conf -p conf/qemu.conf git-repos/ mldir/ ./deploy-shiny-nginx.sh && 

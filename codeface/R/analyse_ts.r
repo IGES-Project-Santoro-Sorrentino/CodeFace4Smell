@@ -123,10 +123,11 @@ gen.full.ts <- function(conf) {
   # Check if we have any valid series
   if (length(full.series) == 0) {
     warning("No valid time series found - creating minimal fallback")
-    # Create a minimal fallback time series
+    # Create a minimal fallback time series using current dates instead of 1970
+    current_time <- Sys.time()
     fallback_data <- data.frame(
       ChangedLines = c(0, 0),
-      commitDate = c(as.POSIXct("1970-01-01"), as.POSIXct("1970-01-02"))
+      commitDate = c(current_time, current_time + 86400) # Add 1 day
     )
     fallback_ts <- xts(fallback_data$ChangedLines, order.by=fallback_data$commitDate)
     return(fallback_ts)
@@ -582,8 +583,9 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
   
   # Initialize variables in the main scope with fallback values
   full.ts <- NULL
+  current_time <- Sys.time()
   series.merged <- data.frame(
-    time = as.POSIXct(c("1970-01-01", "1970-01-02")),
+    time = c(current_time, current_time + 86400), # Use current time + 1 day
     value = c(0, 0),
     type = c("Averaged (small window)", "Averaged (large window)"),
     value.scaled = c(0, 0)
@@ -596,9 +598,10 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
     warning("Error in time series generation: ", e$message)
     # series.merged is already initialized with fallback data
     # Make full.ts available for later use
+    current_time <- Sys.time()
     fallback_data <- data.frame(
       ChangedLines = c(0, 0),
-      commitDate = c(as.POSIXct("1970-01-01"), as.POSIXct("1970-01-02"))
+      commitDate = c(current_time, current_time + 86400) # Use current time + 1 day
     )
     full.ts <<- xts(fallback_data$ChangedLines, order.by=fallback_data$commitDate)
   })
@@ -606,9 +609,10 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
   # Ensure full.ts is available - if it's still NULL, create minimal data
   if (is.null(full.ts)) {
     warning("full.ts is NULL after error handling - creating minimal fallback")
+    current_time <- Sys.time()
     fallback_data <- data.frame(
       ChangedLines = c(0, 0),
-      commitDate = c(as.POSIXct("1970-01-01"), as.POSIXct("1970-01-02"))
+      commitDate = c(current_time, current_time + 86400) # Use current time + 1 day
     )
     full.ts <- xts(fallback_data$ChangedLines, order.by=fallback_data$commitDate)
   }

@@ -194,8 +194,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
 ## Filter Widget List (remove widgets that take too long to load)
 ##
 widget.list.filtered <- widget.list[
-  names(widget.list) != "widget.commit.structure.mds" &
-    names(widget.list) != "widget.punchcard.ml"
+  names(widget.list) != "widget.commit.structure.mds"
   ]
 
 ##

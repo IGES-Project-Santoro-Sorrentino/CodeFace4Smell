@@ -448,7 +448,12 @@ ml.thread.loc.to.glob <- function(ml.id.map, loc.id, all.ids=FALSE) {
 ## surrounded by braces, return the name proper.
 fix.name <- function(name) {
     name <- str_trim(name)
-    if (substr(name, 1, 1) == "(" && substr(name, str_length(name),
+    # Handle vector input by processing each element
+    if (length(name) > 1) {
+        return(sapply(name, fix.name))
+    }
+    
+    if (nchar(name) > 0 && substr(name, 1, 1) == "(" && substr(name, str_length(name),
                                             str_length(name)) == ")") {
         name <- substr(name, 2, str_length(name)-1)
     }

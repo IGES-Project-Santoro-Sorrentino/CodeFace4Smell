@@ -76,10 +76,22 @@ compute.doc.matrices <- function(forest.corp, data.path) {
   doCompute <- !(file.exists(tdm.file)) && !(file.exists(dtm.file))
 
   if (doCompute) {
+    # Check if corpus is empty
+    if (length(forest.corp$corp) == 0) {
+      logwarn("Corpus is empty, cannot create TermDocumentMatrix")
+      return(list(tdm=NULL, dtm=NULL))
+    }
+    
     tdm <- TermDocumentMatrix(forest.corp$corp,
                               list(stemming = FALSE, stopwords = FALSE))
     dtm <- DocumentTermMatrix(forest.corp$corp,
                               list(stemming = FALSE, stopwords = FALSE))
+    
+    # Check if matrices are empty
+    if (nrow(tdm) == 0 || ncol(tdm) == 0) {
+      logwarn("TermDocumentMatrix is empty")
+      return(list(tdm=NULL, dtm=NULL))
+    }
     ## Oookay, this is just for the linguistically curious: Check how well
     ## Zipf's and Heap's law are fulfilled.
 ###Zipf_plot(dtm)
@@ -237,10 +249,25 @@ check.corpus.precon <- function(corp.base) {
 
   ## Condition #2: Authors must be specified using "name <email>" format
   fix.author <- function(doc) {
-    author <- meta(doc, tag="author")
+    # Check if doc is already a string (from recursive call)
+    if (is.character(doc) && length(doc) == 1) {
+      author <- doc
+    } else {
+      author <- meta(doc, tag="author")
+    }
+    
+    # Handle vector input by processing each element
+    if (length(author) > 1) {
+      return(sapply(author, fix.author))
+    }
 
     if(identical(author, character(0))) {
       author <- "unknown"
+    }
+    
+    # Ensure author is a single string
+    if (length(author) > 1) {
+      author <- author[1]
     }
 
     ## Remove problematic punctuation characters
@@ -260,7 +287,7 @@ check.corpus.precon <- function(corp.base) {
     ## Handle case where author is like
     ## Adrian Prantl via llvm-dev <llvm-dev@lists.llvm.org>
     pattern <- " via [[:print:]]*"
-    if (grepl(pattern,author, TRUE)) {
+    if (length(author) == 1 && grepl(pattern,author, TRUE)) {
       ## Extract name and replace email part
       name <- gsub(pattern, author, replacement="")
 
@@ -271,7 +298,7 @@ check.corpus.precon <- function(corp.base) {
     }
 
     ## Check if email exists
-    email.exists <- grepl("<.+>", author, TRUE)
+    email.exists <- length(author) == 1 && grepl("<.+>", author, TRUE)
 
     if(!email.exists) {
       msg <- str_c("Incorrectly formatted author field (expected XXX XXX ",
@@ -287,7 +314,7 @@ check.corpus.precon <- function(corp.base) {
       ## would otherwise be interpreted as invalid regexp
       ## Additionally, only perform the substitution if email
       ## is not empty, since otherwise sub() will fail.
-      if(email == "") {
+      if(length(email) == 1 && email == "") {
         ## email address could not be resolved, use a good (but invalid)
         ## replacement
         email <- "could.not.resolve@unknown.tld"
@@ -301,7 +328,7 @@ check.corpus.precon <- function(corp.base) {
       }
 
       ## In some cases only an email is provided
-      if (name=="") {
+      if (length(name) == 1 && name=="") {
         name <- gsub("\\.", " ", gsub("@.*", "", email))
       }
 
@@ -316,7 +343,7 @@ check.corpus.precon <- function(corp.base) {
       ## Get email and name parts
       r <- regexpr("<.+>", author, TRUE)
       ## email is at start
-      if(r == 1) {
+      if(length(r) == 1 && r == 1) {
         ## Check if only an email is provided
         if(attr(r, "match.length") == nchar(author)) {
           ## Only an email like "<hans.huber@hubercorp.com>" is provided
@@ -339,14 +366,14 @@ check.corpus.precon <- function(corp.base) {
     ## in further steps of the analysis and the ID service, we use only the
     ## local part of an email address as name.
     ## E.g., "'hans.huber@hubercorp.com' <hans.huber@hubercorp.com>"
-    if (length(gregexpr(pattern = "@", author, fixed = TRUE)[[1]]) > 1) {
+    if (length(author) == 1 && length(gregexpr(pattern = "@", author, fixed = TRUE)[[1]]) > 1) {
       ## Get email and name parts first
       r <- regexpr("<.+>", author, TRUE)
       email <- substr(author, r, r + attr(r, "match.length") - 1)
       name <- sub(email, "", author, fixed=TRUE)
       name <- fix.name(name)
 
-      if(regexpr("\\S+@\\S+", name, TRUE) == 1) {
+      if(length(name) == 1 && regexpr("\\S+@\\S+", name, TRUE) == 1) {
         ## Name looks like an email address. Use only local part as name.
         name <- gsub("\\.", " ", gsub("@.*", "", name))
       }
@@ -506,9 +533,13 @@ dispatch.all <- function(conf, repo.path, resdir) {
 
   ## Make release labels easier to read when automatically constructed
   ## ranges are used
-  release.labels <- lapply(1:length(release.labels), function(i) {
-      return(gen.range.path(i, release.labels[[i]]))
-  })
+  if (length(release.labels) > 0) {
+    release.labels <- lapply(1:length(release.labels), function(i) {
+        return(gen.range.path(i, release.labels[[i]]))
+    })
+  } else {
+    release.labels <- list()
+  }
 
   ## Obtain a unique numerical ID for the mailing list (and clear
   ## any existing results on the way)
@@ -551,6 +582,9 @@ dispatch.all <- function(conf, repo.path, resdir) {
 
   ## Store all mails to database
   store.mail(conf, forest.corp$forest, corp, ml.id)
+
+  ## Create activity plot and frequent subjects even when no release ranges exist
+  create.global.ml.data(conf, forest.corp, ml.id)
 
   ## Store all mails to local storage
   resdir.complete <- file.path(resdir, "complete")
@@ -940,4 +974,93 @@ store.data <- function(conf, res, range.id, ml.id) {
       store.twomode.graphs(conf, res$twomode.graphs, ml.id, range.id)
   }
   store.communication.graph(conf, res$communication.network, range.id)
+}
+
+## Create global mailing list data (activity plot and frequent subjects) when no release ranges exist
+create.global.ml.data <- function(conf, forest.corp, ml.id) {
+  loginfo("Creating global mailing list data for widgets", logger="ml.analysis")
+  
+  ## Create activity plot
+  activity.plot.name <- str_c(conf$listname, " activity")
+  activity.plot.id <- get.clear.plot.id(conf, activity.plot.name, range.id=NULL, 
+                                        labelx="Time", labely="Messages per Day")
+  
+  ## Compute time series data for activity plot
+  msgs <- lapply(forest.corp$corp, function(x) {
+      as.POSIXct(meta(x, tag="datetimestamp")) })
+  msgs <- do.call(c, msgs)
+  
+  if (length(msgs) > 0) {
+    series <- xts(rep(1,length(msgs)), order.by=msgs)
+    series.daily <- apply.daily(series, sum)
+    
+    ## Store it into the data base
+    ts.df <- gen.df.from.ts(series.daily, "Mailing list activity")
+    dat <- data.frame(time=as.character(ts.df$time),
+                      value=ts.df$value,
+                      value_scaled=ts.df$value.scaled,
+                      plotId=activity.plot.id)
+    
+    res <- dbWriteTable(conf$con, "timeseries", dat, append=TRUE, row.names=FALSE)
+    if (!res) {
+      logwarn("Could not write timeseries into database for global analysis")
+    } else {
+      loginfo("Created global activity plot for mailing list", logger="ml.analysis")
+    }
+  }
+  
+  ## Create frequent subjects data
+  forest <- forest.corp$forest
+  
+  ## Get thread information
+  authors.per.thread <- function(i) {
+    length(unique(forest[forest[,"threadID"]==i, "author"]))
+  }
+  messages.per.thread <- function(i) {
+    length(forest[forest[,"threadID"]==i, "subject"])
+  }
+  get.subject <- function(i) {
+    as.character(forest[forest[,"threadID"]==i, "subject"][1])
+  }
+  
+  ## Determine authors and messages per thread
+  num.authors <- sapply(unique(forest[,"threadID"]), authors.per.thread)
+  num.messages <- sapply(unique(forest[,"threadID"]), messages.per.thread)
+  thread.info <- data.frame(authors=num.authors, messages=num.messages,
+                            tid=attr(num.messages, "names"))
+  
+  ## Sort by message count
+  thread.info <- thread.info[order(thread.info$messages, decreasing=TRUE),]
+  
+  ## Get subjects
+  subjects.msgs <- sapply(thread.info$tid, get.subject)
+  thread.info <- cbind(thread.info, subject=subjects.msgs)
+  
+  ## Limit to top 200 subjects
+  MAX.SUBJECTS <- 200
+  if (nrow(thread.info) > MAX.SUBJECTS) {
+    thread.info.cut <- thread.info[1:MAX.SUBJECTS,]
+  } else {
+    thread.info.cut <- thread.info
+  }
+  
+  ## Store frequent subjects (use first available release range or create a dummy one)
+  range_result <- dbGetQuery(conf$con, str_c("SELECT id FROM release_range WHERE projectId=", conf$pid, " LIMIT 1"))
+  
+  if (nrow(range_result) > 0) {
+    range.id <- range_result$id[1]
+  } else {
+    ## Create a dummy release range if none exists
+    range.id <- 1  # Use a default range ID
+  }
+  
+  ## Store freq_subjects data
+  dat <- data.frame(projectId=conf$pid, mlId=ml.id, releaseRangeId=range.id,
+                   subject=thread.info.cut$subject, count=thread.info.cut$messages)
+  res <- dbWriteTable(conf$con, "freq_subjects", dat, append=TRUE, row.names=FALSE)
+  if (!res) {
+    logwarn("Could not write freq_subjects into database for global analysis")
+  } else {
+    loginfo("Created global frequent subjects data for mailing list", logger="ml.analysis")
+  }
 }

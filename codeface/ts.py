@@ -40,17 +40,19 @@ def doAnalysis(dbfilename, destdir, revrange=None, rc_start=None):
         print("Warning: Could not load VCS analysis database {0}: {1}".format(dbfilename, str(e)))
         # Create a minimal time series result
         from .commit_analysis import TimeSeries
+        import time
+        current_time = int(time.time())
         if revrange:
             res = TimeSeries(revrange[0], revrange[1])
-            res.start_date = 0
-            res.end_date = 0
+            res.start_date = current_time
+            res.end_date = current_time
             res.rc_start_date = None
             return res
         else:
             # This shouldn't happen, but provide a fallback
             res = TimeSeries("unknown", "unknown")
-            res.start_date = 0
-            res.end_date = 0
+            res.start_date = current_time
+            res.end_date = current_time
             res.rc_start_date = None
             return res
 
@@ -66,16 +68,18 @@ def doAnalysis(dbfilename, destdir, revrange=None, rc_start=None):
         print("Warning: Error creating time series for {0}: {1}".format(sfx, str(e)))
         # Create a minimal time series result
         from .commit_analysis import TimeSeries
+        import time
+        current_time = int(time.time())
         if revrange:
             res = TimeSeries(revrange[0], revrange[1])
-            res.start_date = 0
-            res.end_date = 0
+            res.start_date = current_time
+            res.end_date = current_time
             res.rc_start_date = None
             return res
         else:
             res = TimeSeries(vcs.rev_start, vcs.rev_end)
-            res.start_date = 0
-            res.end_date = 0
+            res.start_date = current_time
+            res.end_date = current_time
             res.rc_start_date = None
             return res
 
@@ -123,10 +127,42 @@ def dispatch_ts_analysis(resdir, conf):
         except Exception as e:
             print("Warning: Failed to process revision range {0}-{1}: {2}".format(
                 conf["revisions"][i-1], conf["revisions"][i], str(e)))
-            # Add minimal timestamps to prevent the analysis from failing completely
-            if (i==1):
-                tstamps.append(("release", conf["revisions"][i-1], 0))
-            tstamps.append(("release", conf["revisions"][i], 0))
+            # Try to get actual commit dates from git instead of using fallback timestamps
+            try:
+                import subprocess
+                import time
+                
+                # Get actual commit dates from git
+                def get_git_commit_date(revision):
+                    try:
+                        result = subprocess.run(['git', 'show', '-s', '--format=%ct', revision], 
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            return int(result.stdout.strip())
+                    except:
+                        pass
+                    return None
+                
+                start_date = get_git_commit_date(conf["revisions"][i-1])
+                end_date = get_git_commit_date(conf["revisions"][i])
+                
+                # Use actual dates if available, otherwise use current time as fallback
+                if start_date is None:
+                    start_date = int(time.time())
+                if end_date is None:
+                    end_date = int(time.time())
+                
+                if (i==1):
+                    tstamps.append(("release", conf["revisions"][i-1], start_date))
+                tstamps.append(("release", conf["revisions"][i], end_date))
+                
+            except Exception as git_error:
+                print("Warning: Could not get git commit dates: {0}".format(str(git_error)))
+                # Final fallback - use current time instead of epoch
+                current_time = int(time.time())
+                if (i==1):
+                    tstamps.append(("release", conf["revisions"][i-1], current_time))
+                tstamps.append(("release", conf["revisions"][i], current_time))
 
     ## Stage 2: Insert time stamps for all releases considered into the database
     writeReleases(dbm, tstamps, conf)

@@ -51,6 +51,9 @@ symbols.processing.status <- symbols.weather
 symbols.project.status <- symbols.emotion
 
 as.color <- function(status) {
+  if (is.null(status) || length(status) == 0 || !status %in% status.codes) {
+    return(status.codes.colors[[which(status.codes == "error")]])
+  }
   status.codes.colors[[which(status.codes == status)]]
 }
 
