@@ -290,3 +290,20 @@ plot.agreement <- function(dat) {
 
   return(p.matrix)
 }
+
+## Determine developer class based on vertex centrality
+## input: undirected graph
+## output: list of core and peripheral developers
+get.developer.class.centrality.undirected <- function(graph, threshold=0.8,
+                                           FUN=igraph::degree) {
+  centrality.vec <- sort(FUN(graph), decreasing=T)
+  centrality.df <- data.frame(author=names(centrality.vec),
+                              centrality=as.vector(centrality.vec))
+  centrality.threshold <- threshold * sum(centrality.vec)
+  core.test <- cumsum(centrality.vec) < centrality.threshold
+  core.developers <- centrality.df[core.test,]
+  peripheral.developers <- centrality.df[!core.test,]
+  res <- list(core=core.developers, peripheral=peripheral.developers)
+  
+  return(res)
+}

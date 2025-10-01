@@ -181,6 +181,41 @@ get.cycles.con <- function(con, pid, boundaries=FALSE, allow.empty.ranges=FALSE)
   return(res)
 }
 
+## Compute if a developer is (potentially) sponsored or not.
+## reference: Paid vs. Volunteer Work in Open Source by D. Riehle
+## Input: conf, developer id, start.date, end.date
+## Output: True (aka sponsored) if more than 95% of his commits
+##         are executed in Mon-Fri 8/6pm
+is.person.sponsored.in.range <- function(conf, person.id, start.date, end.date){
+  date <- dbGetQuery(conf$con,str_c("SELECT commitDate FROM commit WHERE commitDate BETWEEN ", sq(start.date), 
+      " AND ", sq(end.date), " AND projectId=", conf$pid, " AND author = ", person.id))
+  free.time <- 0
+  paid.time <- 0
+  for (com in unlist(date)) {
+    wd <- wday(as.Date(strsplit(com,' ')[[1]][1]))
+    if(is.nan(wd)){
+      next()
+    }
+    if ((wd == 1) | (wd == 7)){
+      free.time <- free.time + 1
+    } else {
+      hr <- hour(com)
+      if (hr > 8 & hr < 18){
+        paid.time <- paid.time + 1
+      } else {
+        free.time <- free.time + 1
+      }
+    }
+  }
+  
+  ## if 95% of its commit are executed in working time, he is considered sponsored
+  res <- paid.time/(free.time+paid.time)
+  if (!is.nan(res) & res > 0.95){
+    return(1)
+  } 
+  return(0)
+}
+
 get.cycles <- function(conf, ...) {
   return(get.cycles.con(conf$con, conf$pid, ...))
 }

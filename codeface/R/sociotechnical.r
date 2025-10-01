@@ -43,8 +43,8 @@ load.code.graph <- function(rangedir) {
   ## Generate the graph and assign db ids and devs names to vertices
   code.graph <- graph_from_adjacency_matrix(adj.matrix, mode="undirected", 
                                             diag=FALSE, weighted=TRUE)
-  names <- lapply(adj.matrix.ids, function(id) { get.person.name(conf$con, id) })
-  V(code.graph)$name <- as.character(names)
+  names <- lapply(adj.matrix.ids, function(id) { query.person.name(conf$con, id) })
+  V(code.graph)$name <- unlist(names)
   V(code.graph)$id <- adj.matrix.ids
   ## simplify the graph removing multiple edges and loops
   code.graph <- simplify(code.graph, remove.multiple=TRUE, remove.loops=TRUE,
@@ -67,8 +67,8 @@ load.mailinglist.graph <- function(conf, start.date, end.date) {
   ## Generate the graph and assign db ids and devs names to vertices
   mail.graph <- graph.data.frame(res, directed=FALSE)
   ids <- V(mail.graph)$name
-  names <- lapply(ids, function(id) { get.person.name(conf$con, id) })
-  V(mail.graph)$name <- names
+  names <- lapply(ids, function(id) { query.person.name(conf$con, id) })
+  V(mail.graph)$name <- unlist(names)
   V(mail.graph)$id <- ids
   ## simplify the graph removing multiple edges and loops
   mail.graph <- simplify(mail.graph, remove.multiple=TRUE, remove.loops=TRUE,
@@ -171,7 +171,7 @@ community.smell.missing.links <- function (mail.graph, code.graph, precomputed.s
   }
   
   ## If organisational silo is not pre-computed, calculate it
-  if (is.na(precomputed.silo)){
+  if (length(precomputed.silo) == 1 && is.na(precomputed.silo)){
     precomputed.silo <- community.smell.organisational.silo(mail.graph, code.graph)
   }
   ## Add the missing links due to developers abstence in the mailing lists
@@ -228,7 +228,7 @@ community.smell.primadonnas <- function (mail.graph, clusters, code.graph, colla
     return(primadonnas)
   }
   
-  if (is.na(precomputed.black)) {
+  if (length(precomputed.black) == 1 && is.na(precomputed.black)) {
     precomputed.black <- community.smell.potential.black.cloud(mail.graph, clusters)
   }
   for (black.link in precomputed.black) {
@@ -329,13 +329,24 @@ community.metric.mean.communicability <- function (mail.graph, code.graph) {
   }
   
   ## for each collaboration compute its in-communicability value
-  collaborations <- get.edgelist(code.graph)
   mai <- c()
-  for (coll in 1:length(E(code.graph))) {
-    id.dev1 <- V(code.graph)[V(code.graph)$name == collaborations[coll, 1]]$id
-    id.dev2 <- V(code.graph)[V(code.graph)$name == collaborations[coll, 2]]$id
-    neigh1 <- neighbors(code.graph, V(code.graph)[V(code.graph)$id == id.dev1])$id
-    neigh2 <- neighbors(code.graph, V(code.graph)[V(code.graph)$id == id.dev2])$id
+  for (edge.idx in 1:length(E(code.graph))) {
+    ## Get the endpoints of this edge (returns vertex indices, not names)
+    edge.endpoints <- ends(code.graph, edge.idx, names = FALSE)
+    vertex.idx1 <- edge.endpoints[1, 1]
+    vertex.idx2 <- edge.endpoints[1, 2]
+    
+    ## Skip if invalid vertices
+    if (length(vertex.idx1) == 0 || length(vertex.idx2) == 0) {
+      next
+    }
+    
+    ## Get the IDs of the two developers
+    id.dev1 <- V(code.graph)$id[vertex.idx1]
+    id.dev2 <- V(code.graph)$id[vertex.idx2]
+    
+    neigh1 <- neighbors(code.graph, vertex.idx1)$id
+    neigh2 <- neighbors(code.graph, vertex.idx2)$id
     code.neighbors <- unique(union(neigh1, neigh2))
     dem <- length(code.neighbors) / length(V(code.graph))
     neigh1.mail <- c()
@@ -526,17 +537,23 @@ create.community.smells.report <- function(sociotechdir, project.name) {
         next()
       }
       ## if the first value is going to be a 0 by default, skip it
-      if((metrics[metric] %in% zero) || (smells[smell] %in% zero)) {
-        cor <- cor.test(unlist(df[metrics[metric]])[-1], unlist(df[smells[smell]])[-1],
-                        method="pearson")
-        mat1.p[smell,metric] <- cor$p.value
-        mat1.e[smell,metric] <- cor$estimate
-      } else{
-        cor <- cor.test(unlist(df[metrics[metric]]), unlist(df[smells[smell]]),
-                        method="pearson")
-        mat1.p[smell,metric] <- cor$p.value
-        mat1.e[smell,metric] <- cor$estimate
-      }
+      tryCatch({
+        if((metrics[metric] %in% zero) || (smells[smell] %in% zero)) {
+          cor <- cor.test(unlist(df[metrics[metric]])[-1], unlist(df[smells[smell]])[-1],
+                          method="pearson")
+          mat1.p[smell,metric] <- cor$p.value
+          mat1.e[smell,metric] <- cor$estimate
+        } else{
+          cor <- cor.test(unlist(df[metrics[metric]]), unlist(df[smells[smell]]),
+                          method="pearson")
+          mat1.p[smell,metric] <- cor$p.value
+          mat1.e[smell,metric] <- cor$estimate
+        }
+      }, error = function(e) {
+        ## Not enough observations or other error - set to NA
+        mat1.p[smell,metric] <<- NA
+        mat1.e[smell,metric] <<- NA
+      })
     }
   }
   pears.df.p <- data.frame(mat1.p)
@@ -555,17 +572,23 @@ create.community.smells.report <- function(sociotechdir, project.name) {
         next()
       }
       ## if the first value is going to be a 0 by default, skip it
-      if((metrics[metric] %in% zero) || (smells[smell] %in% zero)) {
-        cor <- cor.test(unlist(df[metrics[metric]])[-1], unlist(df[smells[smell]])[-1],
-                        method="spearman")
-        mat2.p[smell,metric] <- cor$p.value
-        mat2.e[smell,metric] <- cor$estimate
-      } else {
-        cor <- cor.test(unlist(df[metrics[metric]]), unlist(df[smells[smell]]),
-                        method="spearman")
-        mat2.p[smell,metric] <- cor$p.value
-        mat2.e[smell,metric] <- cor$estimate
-      }
+      tryCatch({
+        if((metrics[metric] %in% zero) || (smells[smell] %in% zero)) {
+          cor <- cor.test(unlist(df[metrics[metric]])[-1], unlist(df[smells[smell]])[-1],
+                          method="spearman")
+          mat2.p[smell,metric] <- cor$p.value
+          mat2.e[smell,metric] <- cor$estimate
+        } else {
+          cor <- cor.test(unlist(df[metrics[metric]]), unlist(df[smells[smell]]),
+                          method="spearman")
+          mat2.p[smell,metric] <- cor$p.value
+          mat2.e[smell,metric] <- cor$estimate
+        }
+      }, error = function(e) {
+        ## Not enough observations or other error - set to NA
+        mat2.p[smell,metric] <<- NA
+        mat2.e[smell,metric] <<- NA
+      })
     }
   }
   spear.df.p <- data.frame(mat2.p)

@@ -155,3 +155,17 @@ do.update.timezone.information <- function(conf, project.id) {
 
     logdevinfo(paste("Updated", length(zones), "timezone entries"))
 }
+
+## Compute the number of different timezones involved in a project's range
+get.range.timezones.number <- function(conf, start.date, end.date) {
+  ## Query all commits of a project's range and retrieve users timezones
+  res <- dbGetQuery(conf$con, str_c("SELECT authorTimezones",
+                                    " FROM commit WHERE commitDate BETWEEN ", sq(start.date), 
+                                    " AND ",sq(end.date)," AND projectId=", conf$pid,
+                                    " GROUP BY authorTimezones"))
+  
+  ## handle multi-timezones
+  res <- strsplit(paste(unlist(res),collapse=";"), ";")
+  
+  return(length(unique(unlist(res))))
+}

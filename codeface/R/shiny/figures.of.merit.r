@@ -49,15 +49,37 @@ fit.plot.linear <- function(pid, name, period.in.days) {
   ts.orig <- query.timeseries(conf$con, plot.id)
   ## Remove NA entries in the time series (where do they come from?
   ts.orig <- data.frame(value=ts.orig$value[!is.na(ts.orig$time)], time=ts.orig$time[!is.na(ts.orig$time)])
+  
+  ## Check if we have any data at all
+  if (nrow(ts.orig) == 0) {
+    return(list(rel.increase.per.year=NA, sigma=NA, fit.value.now=NA))
+  }
+  
   ts.x <- xts(x=ts.orig$value, order.by=ts.orig$time)
-  ## Restrict to given time period
-  ts.x <- ts.x[paste(ts.orig$time[length(ts.orig$time)] - period, "/", sep="")]
+  
+  ## Check if data is recent or historical
+  last.timestamp <- ts.orig$time[length(ts.orig$time)]
+  current.time <- as.POSIXct(Sys.time())
+  data.age.days <- as.numeric(difftime(current.time, last.timestamp, units="days"))
+  
+  ## If data is older than 365 days (historical), use all data
+  ## Otherwise, restrict to the specified period
+  if (data.age.days > 365) {
+    ts.x.period <- ts.x
+  } else {
+    ts.x.period <- ts.x[paste(last.timestamp - period, "/", sep="")]
+    ## If filtering removed too much data, use all available data
+    if (length(ts.x.period) < 2) {
+      ts.x.period <- ts.x
+    }
+  }
+  
   ## Summarize per week
-  ts <- apply.weekly(ts.x, function(x) { mean(x) })
+  ts <- apply.weekly(ts.x.period, function(x) { mean(x) })
   ts <- data.frame(time=index(ts), value=coredata(ts))
   ## Check if we have any data left
   if (length(ts$time) < 2) {
-    return(list(rel.increase.per.year=NA, sigma=NA))
+    return(list(rel.increase.per.year=NA, sigma=NA, fit.value.now=NA))
   }
   ## Check if we have enough variance in the data to perform a meaningful fit
   if (length(unique(ts$value)) == 1) {

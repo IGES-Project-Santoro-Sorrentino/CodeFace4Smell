@@ -149,10 +149,20 @@ extract.commnets <- function(forest.corp, termfreq, repo.path, data.path) {
 
   if (doCompute) {
     gen.dir(cont.dir)
-    extract.commnet(forest.corp$forest, termfreq, "content", data.path)
+    tryCatch({
+      extract.commnet(forest.corp$forest, termfreq, "content", data.path)
+    }, error = function(e) {
+      logwarn(paste("Failed to extract content communication networks:", e$message, 
+                    "- This is often due to insufficient data in the corpus."), logger="ml.analysis")
+    })
 
     gen.dir(subj.dir)
-    extract.commnet(forest.corp$forest, termfreq, "subject", data.path)
+    tryCatch({
+      extract.commnet(forest.corp$forest, termfreq, "subject", data.path)
+    }, error = function(e) {
+      logwarn(paste("Failed to extract subject communication networks:", e$message,
+                    "- This is often due to insufficient data in the corpus."), logger="ml.analysis")
+    })
   }
 }
 
@@ -706,22 +716,29 @@ dispatch.steps <- function(conf, repo.path, data.path, forest.corp, cycle,
       as.POSIXct(meta(x, tag="datetimestamp")) })
   msgs <- do.call(c, msgs)
 
-  series <- xts(rep(1,length(msgs)), order.by=msgs)
-  series.daily <- apply.daily(series, sum)
+  ## Remove NA values to avoid xts errors
+  msgs <- msgs[!is.na(msgs)]
 
-  ## ... and store it into the data base, appending it to the activity plot.
-  ts.df <- gen.df.from.ts(series.daily, "Mailing list activity")
-  dat <- data.frame(time=as.character(ts.df$time),
-                    value=ts.df$value,
-                    value_scaled=ts.df$value.scaled,
-                    plotId=activity.plot.id)
+  if (length(msgs) > 0) {
+    series <- xts(rep(1,length(msgs)), order.by=msgs)
+    series.daily <- apply.daily(series, sum)
 
-  ## NOTE: We append new values to the existing content. This way,
-  ## we can plot arbitrary subsets of the series by selecting
-  ## subranges, without the need to concatenate parts together
-  res <- dbWriteTable(conf$con, "timeseries", dat, append=TRUE, row.names=FALSE)
-  if (!res) {
-    stop("Internal error: Could not write timeseries into database!")
+    ## ... and store it into the data base, appending it to the activity plot.
+    ts.df <- gen.df.from.ts(series.daily, "Mailing list activity")
+    dat <- data.frame(time=as.character(ts.df$time),
+                      value=ts.df$value,
+                      value_scaled=ts.df$value.scaled,
+                      plotId=activity.plot.id)
+
+    ## NOTE: We append new values to the existing content. This way,
+    ## we can plot arbitrary subsets of the series by selecting
+    ## subranges, without the need to concatenate parts together
+    res <- dbWriteTable(conf$con, "timeseries", dat, append=TRUE, row.names=FALSE)
+    if (!res) {
+      stop("Internal error: Could not write timeseries into database!")
+    }
+  } else {
+    logwarn("No valid timestamps found in messages for time series analysis", logger="ml.analysis")
   }
 
   ## Compute descriptive statistics
@@ -989,6 +1006,9 @@ create.global.ml.data <- function(conf, forest.corp, ml.id) {
   msgs <- lapply(forest.corp$corp, function(x) {
       as.POSIXct(meta(x, tag="datetimestamp")) })
   msgs <- do.call(c, msgs)
+  
+  ## Remove NA values to avoid xts errors
+  msgs <- msgs[!is.na(msgs)]
   
   if (length(msgs) > 0) {
     series <- xts(rep(1,length(msgs)), order.by=msgs)
