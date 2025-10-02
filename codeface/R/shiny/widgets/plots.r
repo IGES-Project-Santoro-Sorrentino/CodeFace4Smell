@@ -125,8 +125,12 @@ listViews.widget.timeseries <- function(w) {
     if (is.null(w$plots)) {
       stop("listViews.widget.timeseries.plots called with uninitialized widget!")
     }
-    l <- w$plots()$id
-    names(l) <- w$plots()$name
+    plots_data <- w$plots()
+    if (is.null(plots_data) || nrow(plots_data) == 0) {
+      return(numeric(0))
+    }
+    l <- plots_data$id
+    names(l) <- as.character(plots_data$name)
     l
   })
 }

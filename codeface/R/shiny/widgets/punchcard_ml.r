@@ -81,8 +81,12 @@ renderWidget.widget.punchcard.ml <- function(w) {
 
 listViews.widget.punchcard.ml <- function(w) {
   reactive({
-    l <- w$plots()$id
-    names(l) <- w$plots()$name
+    plots_data <- w$plots()
+    if (is.null(plots_data) || nrow(plots_data) == 0) {
+      return(numeric(0))
+    }
+    l <- plots_data$id
+    names(l) <- as.character(plots_data$name)
     l
   })
 }
