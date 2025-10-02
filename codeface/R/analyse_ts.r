@@ -24,6 +24,7 @@ suppressPackageStartupMessages(library(xts))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(scales))
 suppressPackageStartupMessages(library(plyr))
+suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(yaml))
 suppressPackageStartupMessages(library(lubridate))
 suppressPackageStartupMessages(library(logging))
@@ -104,13 +105,19 @@ gen.full.ts <- function(conf) {
   tstamps <- conf$tstamps.release
 
   subset <- c("commitDate", "AddedLines", "DeletedLines")
+  
+  
   ts <- get.commits.by.ranges(conf, subset, make.index.unique)
+  
 
   if (dim(boundaries)[1] != length(ts)) {
     stop("Internal error: Release boundaries don't match ts list length")
   }
 
   for (i in 1:length(ts)) {
+    if (is.null(ts[[i]])) {
+      next
+    }
     ts[[i]]$ChangedLines <- ts[[i]]$AddedLines + ts[[i]]$DeletedLines
     full.series[[i]] <- na.omit(xts(ts[[i]]$ChangedLines,
                                     order.by=ts[[i]]$commitDate))
@@ -119,6 +126,7 @@ gen.full.ts <- function(conf) {
   }
 
   full.series <- full.series[sapply(full.series, length)!=0]
+  
   
   # Check if we have any valid series
   if (length(full.series) == 0) {
@@ -133,7 +141,29 @@ gen.full.ts <- function(conf) {
     return(fallback_ts)
   }
   
-  full.series <- do.call(c, full.series)
+  # Concatenate all series and ensure it's a proper xts object
+  if (length(full.series) > 1) {
+    # Instead of concatenating xts objects, extract data and create new xts
+    all_data <- c()
+    all_times <- c()
+    
+    for (i in 1:length(full.series)) {
+      if (length(full.series[[i]]) > 0) {
+        all_data <- c(all_data, as.numeric(full.series[[i]]))
+        # Ensure times are POSIXct objects
+        times <- index(full.series[[i]])
+        if (!inherits(times, "POSIXct")) {
+          times <- as.POSIXct(times)
+        }
+        all_times <- c(all_times, times)
+      }
+    }
+    
+    # Create a new xts object from the combined data
+    full.series <- xts(all_data, order.by=as.POSIXct(all_times))
+  } else {
+    full.series <- full.series[[1]]
+  }
 
   return (full.series)
 }
@@ -154,30 +184,46 @@ gen.rev.list <- function(revisions) {
 ## data point. Using the robust median instead of mean considerably
 ## reduces the amount of outliers
 process.ts <- function(series) {
+  
   # Check if series is NULL or empty
   if (is.null(series) || length(series) == 0) {
     warning("process.ts: series is NULL or empty - returning minimal data frame")
     # Return a minimal data frame to prevent downstream errors
     minimal_df <- data.frame(
-      Date = as.POSIXct(c("1970-01-01", "1970-01-02")),
-      Value = c(0, 0),
-      Type = c("Averaged (small window)", "Averaged (large window)")
+      time = as.POSIXct(c("1970-01-01", "1970-01-02")),
+      value = c(0, 0),
+      type = c("Averaged (small window)", "Averaged (large window)"),
+      value_scaled = c(0, 0)
     )
     return(minimal_df)
   }
   
   # Check if series has valid time index
-  if (!inherits(series, "xts") || !hasTsp(series)) {
+  
+  # Check if series is xts - skip hasTsp check since it's problematic with concatenated series
+  is_xts <- inherits(series, "xts")
+  
+  # For concatenated series, just check if it's xts and has data
+  if (!is_xts || length(series) == 0) {
     warning("process.ts: series is not a valid time series object - returning minimal data frame")
     minimal_df <- data.frame(
-      Date = as.POSIXct(c("1970-01-01", "1970-01-02")),
-      Value = c(0, 0),
-      Type = c("Averaged (small window)", "Averaged (large window)")
+      time = as.POSIXct(c("1970-01-01", "1970-01-02")),
+      value = c(0, 0),
+      type = c("Averaged (small window)", "Averaged (large window)"),
+      value_scaled = c(0, 0)
     )
     return(minimal_df)
   }
 
-  duration <- end(series) - start(series)
+  
+  # Try to get start and end times safely
+  tryCatch({
+    start_time <- start(series)
+    end_time <- end(series)
+    duration <- end_time - start_time
+  }, error = function(e) {
+    stop(e)
+  })
 
   ## We compute the window lengths based on natural time units
   ## to avoid dependencies on the lifetime of the project, or on the
@@ -594,6 +640,7 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
   tryCatch({
     full.ts <- gen.full.ts(conf)
     series.merged <- process.ts(full.ts)
+    
   }, error = function(e) {
     warning("Error in time series generation: ", e$message)
     # series.merged is already initialized with fallback data
@@ -635,14 +682,32 @@ do.ts.analysis <- function(resdir, graphdir, conf) {
   ## TODO: log and sqrt transform are reasonable for the averaged, but not
   ## for the cumulative series
   tryCatch({
-    g <- ggplot(series.merged, aes(x=time, y=value)) + 
-      geom_line(aes(group=type)) +
-      facet_grid(type~., scale="free_y") +
-      geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
-                 data=boundaries.plot) +
-      scale_fill_manual(values = alpha(c("blue", "red"), .1)) +
-      xlab("Time") + ylab("Amount of changes") +
-      ggtitle(paste("Code changes for project '", conf$description, "'", sep=""))
+    # Filter out groups with only one observation to avoid geom_line warnings
+    series.merged.filtered <- series.merged %>%
+      group_by(type) %>%
+      filter(n() > 1) %>%
+      ungroup()
+    
+    if (nrow(series.merged.filtered) > 0) {
+      g <- ggplot(series.merged.filtered, aes(x=time, y=value)) + 
+        geom_line(aes(group=type)) +
+        facet_grid(type~., scale="free_y") +
+        geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
+                   data=boundaries.plot) +
+        scale_fill_manual(values = alpha(c("blue", "red"), .1)) +
+        xlab("Time") + ylab("Amount of changes") +
+        ggtitle(paste("Code changes for project '", conf$description, "'", sep=""))
+    } else {
+      # If no groups have multiple points, create a simple point plot
+      g <- ggplot(series.merged, aes(x=time, y=value)) + 
+        geom_point(aes(colour=type)) +
+        facet_grid(type~., scale="free_y") +
+        geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
+                   data=boundaries.plot) +
+        scale_fill_manual(values = alpha(c("blue", "red"), .1)) +
+        xlab("Time") + ylab("Amount of changes") +
+        ggtitle(paste("Code changes for project '", conf$description, "'", sep=""))
+    }
 
     ## na.omit is required to remove all cycles that don't contain
     ## rc regions.

@@ -61,15 +61,14 @@ load.config <- function(global.file, project.file=NULL) {
     conf$dbport <- as.integer(conf$dbport)
   }
 
-  if(is.null(conf$understand)) {
-    conf$understand <- FALSE
-  }
-
-  if(is.null(conf$sloccount)) {
-    conf$sloccount <- FALSE
-  }
-
   if (is.null(project.file)) {
+      if(is.null(conf$understand)) {
+        conf$understand <- FALSE
+      }
+
+      if(is.null(conf$sloccount)) {
+        conf$sloccount <- FALSE
+      }
       return(conf)
   }
   logdevinfo(paste("Loading project config file '", project.file, "'", sep=""),
@@ -79,7 +78,17 @@ load.config <- function(global.file, project.file=NULL) {
   }
 
   ## Append project configuration to conf
-  conf <- c(conf, yaml.load_file(project.file))
+  project_conf <- yaml.load_file(project.file)
+  conf <- c(conf, project_conf)
+  
+  ## Apply defaults only after merging, if the fields are still null
+  if(is.null(conf$understand)) {
+    conf$understand <- FALSE
+  }
+
+  if(is.null(conf$sloccount)) {
+    conf$sloccount <- FALSE
+  }
 
   if (is.null(conf$project) || is.null(conf$repo)) {
     stop("Malformed configuration: Specify project and repository!\n")

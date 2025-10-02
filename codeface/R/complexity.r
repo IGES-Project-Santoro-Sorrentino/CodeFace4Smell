@@ -300,5 +300,5 @@ config.script.run({
 
   conf <- init.mc(conf)
   loginfo(str_c("Using ", conf$jobs, " jobs\n"), logger="complexity")
-  do.complexity.analysis(conf)
+  invisible(do.complexity.analysis(conf))
 })

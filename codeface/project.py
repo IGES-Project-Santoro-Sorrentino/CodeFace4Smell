@@ -164,6 +164,7 @@ def project_analyse(resdir, gitdir, codeface_conf, project_conf,
     ## NOTE: We rely on proper timestamps, so we can only run
     ## after time series generation
     log.info("=> Performing complexity analysis")
+    log.info("  -> Configuration: sloccount={}, understand={}".format(conf.get("sloccount", "NOT_SET"), conf.get("understand", "NOT_SET")))
     for i, range_id in enumerate(all_range_ids):
         log.info("  -> Analysing range {}".format(range_id))
         exe = abspath(resource_filename(__name__, "R/complexity.r"))

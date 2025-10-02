@@ -195,9 +195,22 @@ dispatch.all <- function(conf, resdir, motif.type) {
             panel_data$date <- as.Date(panel_data$date)
         }
         
+        # Filter out groups with only one observation to avoid geom_line warnings
+        panel_data_filtered <- panel_data %>%
+            group_by(combination) %>%
+            filter(n() > 1) %>%
+            ungroup()
+        
         g <- ggplot(panel_data, aes(x=date, y=value,
                                                       colour=combination, shape=combination)) +
-             geom_point() + geom_line(aes(group=combination)) + scale_x_date("", date_labels="%m-%Y") +
+             geom_point()
+        
+        # Only add lines if there are groups with multiple points
+        if (nrow(panel_data_filtered) > 0) {
+            g <- g + geom_line(data=panel_data_filtered, aes(group=combination))
+        }
+        
+        g <- g + scale_x_date("", date_labels="%m-%Y") +
              ylab("Correlation") +  theme_bw() +
              expand_limits(y=c(-1,1))
 
@@ -341,9 +354,21 @@ dispatch.all <- function(conf, resdir, motif.type) {
     if (!inherits(res$date, "Date")) {
         res$date <- as.Date(res$date)
     }
-    g <- ggplot(res, aes(x=date, y=empirical.count)) + geom_point() + 
-        geom_line(aes(group=count.type)) +
-        facet_grid(count.type~., scales="free_y", labeller=labeller(count.type=labels)) +
+    
+    # Filter out groups with only one observation to avoid geom_line warnings
+    res_filtered <- res %>%
+        group_by(count.type) %>%
+        filter(n() > 1) %>%
+        ungroup()
+    
+    g <- ggplot(res, aes(x=date, y=empirical.count)) + geom_point()
+    
+    # Only add lines if there are groups with multiple points
+    if (nrow(res_filtered) > 0) {
+        g <- g + geom_line(data=res_filtered, aes(group=count.type))
+    }
+    
+    g <- g + facet_grid(count.type~., scales="free_y", labeller=labeller(count.type=labels)) +
         scale_x_date("Date", date_labels="%m-%Y") + expand_limits(y=0) +
         ylab("Count or Ratio") + theme_bw() + ggtitle(make.title(conf, motif.type))
 

@@ -244,23 +244,37 @@ figure.of.merit.complexity <- function(pid) {
                                        "NOT(name='understand_raw') AND ",
                                        "projectId=", pid))
 
-  ## If no plots found, check if we have raw understand data
-  if (nrow(understand.plots) == 0) {
-    ## Check if we have any complexity data at all (from understand_raw or other sources)
-    complexity.data <- dbGetQuery(conf$con,
+  ## Also check for sloccount plots
+  sloccount.plots <- dbGetQuery(conf$con,
+                                str_c("SELECT id, name FROM plots WHERE ",
+                                      "name LIKE 'sloccount%' AND ",
+                                      "NOT(name='sloccount') AND ",
+                                      "projectId=", pid))
+
+  ## If no plots found, check if we have raw complexity data
+  if (nrow(understand.plots) == 0 && nrow(sloccount.plots) == 0) {
+    ## Check if we have any complexity data at all (from understand_raw, sloccount, or other sources)
+    understand.data <- dbGetQuery(conf$con,
                                   str_c("SELECT COUNT(*) as count FROM understand_raw WHERE ",
                                         "plotId IN (SELECT id FROM plots WHERE projectId=", pid, 
                                         " AND name='understand_raw')"))
     
-    if (complexity.data$count > 0) {
+    sloccount.data <- dbGetQuery(conf$con,
+                                 str_c("SELECT COUNT(*) as count FROM sloccount_ts WHERE ",
+                                       "plotId IN (SELECT id FROM plots WHERE projectId=", pid, 
+                                       " AND name='sloccount')"))
+    
+    if (understand.data$count > 0 || sloccount.data$count > 0) {
       return(list(status=status.warn, why="Complexity analysis data is available but time series plots have not been generated yet. Please run the time series analysis."))
     } else {
       return(list(status=status.error, why="No complexity analysis data was found."))
     }
   }
 
-  ## Do a linear fit over the last year
-  res <- lapply(understand.plots$name, function(name) {
+  ## Do a linear fit over the last year for all complexity plots
+  all.plots <- rbind(understand.plots, sloccount.plots)
+  
+  res <- lapply(all.plots$name, function(name) {
     fit.plot.linear(pid, name, 365)
   })
   sigma <- sapply(res, function(x) {x$sigma})
@@ -280,18 +294,18 @@ figure.of.merit.complexity <- function(pid) {
   inc[sigma < 5] <- 0.0
   max.val <- max(inc)
   if (max.val < -0.05) {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.good,
          why=str_c("The Complexity metric ", max.plot, " is falling by ~", format(max.val*100, digits=1), "% per year. This seems to be a good sign for maintainability."))
   } else if (max.val < 0.05) {
     list(status=status.good,
          why=str_c("The maximal complexity metrics have not changed much in the last year."))
   } else if (max.val < 0.40) {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.warn,
          why=str_c("The Complexity metric ", max.plot, " is increasing by ~", format(max.val*100, digits=1), "% per year. This may make it harder to maintain the project."))
   } else {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.bad,
          why=str_c("The Complexity metric ", max.plot, " is increasing by ~", format(max.val*100, digits=1), "% per year. This is quite a lot and may make maintenance hard."))
   }

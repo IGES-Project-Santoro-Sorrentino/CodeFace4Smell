@@ -171,12 +171,28 @@ get.num.cores <- function() {
 
 
 perform.git.checkout <- function(repodir, commit.hash, code.dir, archive.file) {
+  # Ensure the code directory exists
+  if (!dir.exists(code.dir)) {
+    dir.create(code.dir, recursive=TRUE, showWarnings=FALSE)
+  }
+  
   args <- str_c(" --git-dir=", repodir, " archive -o ", archive.file,
                 " --format=tar --prefix='code/' ", commit.hash)
-  system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE)
+  
+  git_result <- system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE)
+  
+  # Check if git archive succeeded
+  if (!file.exists(archive.file)) {
+    stop("Git archive failed: archive file not created")
+  }
 
   args <- str_c("-C ", code.dir, " -xf ", archive.file)
-  system(str_c("tar", args), intern=TRUE, ignore.stderr=TRUE)
+  tar_result <- system(str_c("tar ", args), intern=TRUE, ignore.stderr=TRUE)
+  
+  # Check if tar extraction succeeded
+  if (!dir.exists(file.path(code.dir, "code"))) {
+    stop("Tar extraction failed: code directory not created")
+  }
 }
 
 ## Return the content of a file at a given revision
