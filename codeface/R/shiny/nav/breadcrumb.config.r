@@ -171,7 +171,12 @@ nav.list$dashboard <- list(
   ## (1) Configure he label displayed in the breadcrumb entry
   label = function(paramstr) {  # paramstr must contain project id, e.g. "projectid=4&..."
     pel <- parseQueryString(paramstr)
-    pname <- projects.list$name[projects.list$id == as.numeric(pel$projectid)]
+    project.idx <- which(projects.list$id == as.numeric(pel$projectid))
+    pname <- if (length(project.idx) > 0) {
+      projects.list$name[project.idx]
+    } else {
+      paste("Project", pel$projectid)
+    }
     return(pname)
   },
   ## (2) configure URL for the breadcrumb entry

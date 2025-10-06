@@ -116,7 +116,15 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
     
     ## reactive assignments (can be done in advance)
     output[[id]] <- renderWidget(inst)
-    output[[titleOutput.id]] <- renderText(paste(projects.list$name[[which(projects.list$id == pid())]], widgetTitle(inst)(), sep=" / "))
+    output[[titleOutput.id]] <- renderText({
+      project.idx <- which(projects.list$id == pid())
+      project.name <- if (length(project.idx) > 0) {
+        projects.list$name[[project.idx]]
+      } else {
+        paste("Project", pid())
+      }
+      paste(project.name, widgetTitle(inst)(), sep=" / ")
+    })
     loginfo(paste("Finished initialising new widget:", inst$name))
 
     ## build ui header

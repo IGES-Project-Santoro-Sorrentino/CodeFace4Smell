@@ -99,7 +99,12 @@ createWidgetClass(
 
 renderWidget.widget.release.distance <- function(w) {
   renderPlot({
-    projectname <- projects.list$name[[which(projects.list$id == as.integer(w$pid()))]]
+    project.idx <- which(projects.list$id == as.integer(w$pid()))
+    projectname <- if (length(project.idx) > 0) {
+      projects.list$name[[project.idx]]
+    } else {
+      paste("Project", w$pid())
+    }
     if(is.null(w$pids.compare())) {
       compare.projectnames <- list()
       if (isTRUE(!is.null(w$name2)) && isTRUE(!is.null(w$name2()))) {

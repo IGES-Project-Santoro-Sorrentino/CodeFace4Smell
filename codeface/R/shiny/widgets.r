@@ -278,7 +278,12 @@ widgetColor.default <- function(w) {
 
 ## Default widget title is the class human-readable name
 widgetTitle.default <- function(w) {
-  reactive({w$name})
+  reactive({
+    if (is.null(w$name) || length(w$name) == 0) {
+      return("Unknown Widget")
+    }
+    w$name
+  })
 }
 
 ## Default widget explanation is the widget class description

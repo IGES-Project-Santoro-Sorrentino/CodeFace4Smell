@@ -226,7 +226,8 @@ projectIdChecked <- function(urlsearch) {
         is.na(as.integer(args$projectid)) ||
         (args$projectid != as.integer(args$projectid) ) ||
         !(args$projectid %in% projects.list$id)) {
-    args$projectid <- as.character(projects.list$id[1])
+    # Return NULL instead of defaulting to first project
+    return(NULL)
   }
   as.character(args$projectid)
 }

@@ -62,7 +62,7 @@ common.server.init <- function(input, output, session, app.name) {
     
     # Get current project from URL
     current.project <- pid()
-    if (!is.null(current.project) && !is.na(as.numeric(current.project))) {
+    if (!is.null(current.project) && length(current.project) == 1 && !is.na(as.numeric(current.project))) {
       current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project)]
       if (length(current.project.name) > 0) {
         # Combine cookie projects with current project, removing duplicates
@@ -83,7 +83,7 @@ common.server.init <- function(input, output, session, app.name) {
     
     # Get current project ID from URL
     current.project <- pid()
-    if (!is.null(current.project) && !is.na(as.numeric(current.project))) {
+    if (!is.null(current.project) && length(current.project) == 1 && !is.na(as.numeric(current.project))) {
       # Combine cookie PIDs with current project, removing duplicates
       all.pids <- unique(c(cookie.pids, as.character(current.project)))
       return(all.pids)
@@ -129,18 +129,37 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
     selected = allpids$selected  # to be used for comparisons
 
     observe({
-      if (!isTRUE(is.vector(pid()))) {
+      current_pid <- pid()
+      if (is.null(current_pid)) {
+        loginfo("No project ID specified - showing all projects")
+        return()
+      }
+      
+      if (!isTRUE(is.vector(current_pid))) {
         stop("No projectid parameter in URL")
-      } else if (is.na(as.numeric(pid()))) {
+      } else if (length(current_pid) > 1) {
+        # Handle case where pid() returns multiple values - take the first one
+        current_pid <- current_pid[1]
+        logwarn(paste("Multiple project IDs found, using first one:", current_pid))
+      }
+      
+      if (is.na(as.numeric(current_pid))) {
         stop("projectid URL parameter is empty")
       }
-      loginfo(paste("New Project ID: ", pid()))
+      loginfo(paste("New Project ID: ", current_pid))
     })
 
     range.id <- reactive({input$view})
 
     if (is.null(widgets)) {
-      widgets <- isolate({unlist(strsplit(allpids$args.list()$widget,","))})
+      widget_param <- isolate(allpids$args.list()$widget)
+      if (is.null(widget_param)) {
+        widgets <- character(0)
+      } else {
+        # Handle case where widget_param might be a vector by taking the first element
+        widget_string <- if (length(widget_param) > 1) widget_param[1] else widget_param
+        widgets <- unlist(strsplit(widget_string, ","))
+      }
     }
 
 
@@ -175,7 +194,12 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
       id.panel <- paste("widget", i, project, "panel", sep="_")
       id.ui <- paste("widget", i, project, "ui", sep="_")
       id.help <- paste("widget", i, project, "help", sep="_")
-      project.title <- projects.list$name[[which(projects.list$id == project)]]
+      project.idx <- which(projects.list$id == project)
+      project.title <- if (length(project.idx) > 0) {
+        projects.list$name[[project.idx]]
+      } else {
+        paste("Project", project)
+      }
       if (is.null(widgets.by.id[[id.widget]])) {
         w <- initialize.widget(newWidget(cls, reactive({project}), reactive({input[[paste("view", project, sep="")]]}), selected))
         widgets.by.id[[id.widget]] <<- w
@@ -213,7 +237,7 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
         instance.ids <- reactive({
           # Get current project ID
           current.project.id <- pid()
-          if (!is.null(current.project.id) && !is.na(as.numeric(current.project.id))) {
+          if (!is.null(current.project.id) && length(current.project.id) == 1 && !is.na(as.numeric(current.project.id))) {
             current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project.id)]
             # Filter out the current project from selected projects to avoid duplicates
             other.projects <- selected()[!selected() %in% current.project.name]
