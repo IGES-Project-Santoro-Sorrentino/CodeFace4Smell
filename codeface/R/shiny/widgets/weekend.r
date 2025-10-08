@@ -15,6 +15,9 @@
 ## All Rights Reserved.
 
 ## Also see punchcard.r
+library(ggplot2)
+library(scales)
+
 detailpage <- list(name="widget.weekend.fraction,widget.weekend.fraction.type,widget.punchcard",
                    title="Authors / Time of Activity")
 
@@ -94,6 +97,12 @@ createWidgetClass(
   2, 1,
   detailpage=detailpage
 )
+
+initWidget.widget.weekend.fraction.type <- function(w) {
+  # Call superclass (widget.weekend.fraction)
+  w <- NextMethod(w)
+  return(w)
+}
 
 renderWidget.widget.weekend.fraction.type = function(w) {
   renderPlot({

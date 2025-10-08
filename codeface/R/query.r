@@ -63,6 +63,11 @@ query.sloccount.ts <- function(con, plot.id) {
                  "WHERE plotId=", plot.id)
 
   dat <- dbGetQuery(con, query)
+  if (nrow(dat) == 0) {
+      logwarn(str_c("query.sloccount.ts returned empty result set for plot id ", plot.id),
+              logger="query")
+      return(NULL)
+  }
   colnames(dat) <-  c("time", "person.months", "total.cost", "schedule.months",
                       "avg.devel")
   dat$time <- ymd_hms(dat$time, quiet=TRUE)
@@ -87,6 +92,12 @@ query.project.name <- function(con, pid) {
   dat <- dbGetQuery(con, str_c("SELECT name FROM project WHERE id=", sq(pid)))
 
   return(dat$name)
+}
+
+query.project.analysis.method <- function(con, pid) {
+  dat <- dbGetQuery(con, str_c("SELECT analysisMethod FROM project WHERE id=", sq(pid)))
+
+  return(dat$analysisMethod)
 }
 
 query.projects <- function(con, analysis.method=NULL) {
@@ -139,25 +150,35 @@ get.cycles.con <- function(con, pid, boundaries=FALSE, allow.empty.ranges=FALSE)
   }
 
   res <- res[, column.selection]
-  res$date.start <- ymd_hms(res$date.start, quiet=TRUE)
-  res$date.end <- ymd_hms(res$date.end, quiet=TRUE)
+  
+  # Handle date parsing more robustly
+  if (!inherits(res$date.start, "POSIXct")) {
+    if (is.character(res$date.start)) {
+      res$date.start <- ymd_hms(res$date.start, quiet=TRUE)
+      if (any(is.na(res$date.start))) {
+        # Try alternative parsing
+        res$date.start <- as.POSIXct(res$date.start, format="%Y-%m-%d %H:%M:%S")
+      }
+    } else {
+      # Assume it's a numeric timestamp
+      res$date.start <- as.POSIXct(res$date.start, origin="1970-01-01")
+    }
+  }
+  
+  if (!inherits(res$date.end, "POSIXct")) {
+    if (is.character(res$date.end)) {
+      res$date.end <- ymd_hms(res$date.end, quiet=TRUE)
+      if (any(is.na(res$date.end))) {
+        # Try alternative parsing
+        res$date.end <- as.POSIXct(res$date.end, format="%Y-%m-%d %H:%M:%S")
+      }
+    } else {
+      # Assume it's a numeric timestamp
+      res$date.end <- as.POSIXct(res$date.end, origin="1970-01-01")
+    }
+  }
 
   return(res)
-}
-
-get.cycles <- function(conf, ...) {
-  return(get.cycles.con(conf$con, conf$pid, ...))
-}
-
-## Obtain name from person Id
-get.person.name <- function(con, person.id) {
-  dat <- dbGetQuery(con, str_c("SELECT Name ",
-                               "FROM person ",
-                               "WHERE ID=", person.id))
-  dat$Name <- as.character(dat$Name)
-  Encoding(dat$Name) <- "UTF-8"
-  
-  return(dat[1,])
 }
 
 ## Compute if a developer is (potentially) sponsored or not.
@@ -195,6 +216,10 @@ is.person.sponsored.in.range <- function(conf, person.id, start.date, end.date){
   return(0)
 }
 
+get.cycles <- function(conf, ...) {
+  return(get.cycles.con(conf$con, conf$pid, ...))
+}
+
 ## Obtain the per-release-range statistics
 get.range.stats <- function(con, range.id) {
   dat <- dbGetQuery(con, str_c("SELECT ID, Name, added, deleted, total, ",
@@ -229,16 +254,22 @@ get.commits.by.ranges <- function(conf, subset=NULL, FUN=NULL) {
 }
 
 get.commits.by.date.con <- function(con, pid, start.date, end.date,
-                                    commit.date=TRUE, commit.count=FALSE) {
+                                    commit.date=TRUE, count.type="none") {
   if (commit.date==TRUE) {
     date.type <- "commitDate"
   } else {
     date.type <- "authorDate"
   }
 
-  if (commit.count==TRUE) {
+  if (count.type=="commit") {
     query <- "SELECT author, COUNT(*) as freq"
     group.by <- " GROUP BY author"
+  } else if (count.type=="loc") {
+    query <- "SELECT author, SUM(DiffSize) as freq"
+    group.by <- " GROUP BY author"
+  } else if (count.type!="none") {
+    logerror("Incorrect count.type parameter")
+    stop()
   } else {
     query <- "SELECT *"
     group.by <- NULL
@@ -290,6 +321,12 @@ get.commit.hashes.by.range.con <- function(con, pid, range.id) {
 
 get.commit.hashes.by.range <- function(conf, range.id) {
   return(get.commit.hashes.by.range.con(conf$con, conf$pid, range.id))
+}
+
+get.commit.message <- function(conf, cmt.hash) {
+  dat <- dbGetQuery(conf$con, str_c("SELECT description FROM commit ",
+                               "WHERE commitHash='", cmt.hash, "'", sep=""))
+  return(dat$description)
 }
 
 ## Get scaled commit infos for all cycles of pid
@@ -369,14 +406,34 @@ query.cluster.members <- function(con, cluster.id, prank=FALSE, technique=0) {
 ## Query an edgelist for a given cluster. Note that for single-contributor
 ## clusters, there are no edges, so we need to take this case into account.
 query.cluster.edges <- function(con, cluster.id) {
-  dat <- dbGetQuery(con, str_c("SELECT * FROM ",
-                               "edgelist WHERE clusterId=", cluster.id))
-
-  if (dim(dat)[1] > 0) {
-    return(dat[,c("fromId", "toId", "weight")])
-  } else {
+  # Check if cluster.id is valid
+  if (is.null(cluster.id) || is.na(cluster.id) || cluster.id == "") {
     return(NULL)
   }
+  
+  tryCatch({
+    dat <- dbGetQuery(con, str_c("SELECT * FROM ",
+                                 "edgelist WHERE clusterId=", cluster.id))
+    
+    # Check if we have data and the expected columns
+    if (is.null(dat) || nrow(dat) == 0) {
+      return(NULL)
+    }
+    
+    # Check if the required columns exist
+    required.cols <- c("fromId", "toId", "weight")
+    if (!all(required.cols %in% colnames(dat))) {
+      logwarn(paste("Missing required columns in edgelist for cluster", cluster.id, 
+                    ". Expected:", paste(required.cols, collapse=", "), 
+                    ". Found:", paste(colnames(dat), collapse=", ")))
+      return(NULL)
+    }
+    
+    return(dat[,required.cols])
+  }, error = function(e) {
+    logwarn(paste("Error querying cluster edges for cluster", cluster.id, ":", e$message))
+    return(NULL)
+  })
 }
 
 ## Query the per-cluster, per-person statistics for a given cluster id
@@ -604,6 +661,21 @@ query.mail.edgelist <- function(con, pid, start.date, end.date) {
   return(dat)
 }
 
+## Compute the number messages each author generated across all mailing lists
+## for a single project
+query.author.mail.count <- function(con, pid, start.date, end.date) {
+  query <- str_c("SELECT author, COUNT(*) as freq",
+                 "FROM mail",
+                 "WHERE projectId=", pid,
+                 "AND creationDate >=", sq(start.date),
+                 "AND creationDate <", sq(end.date),
+                 "GROUP BY author", sep=" ")
+
+  dat <- dbGetQuery(con, query)
+
+  return(dat)
+}
+
 ## Distributions for commit statistics
 query.contributions.stats.range <- function(con, range.id, include.id=FALSE) {
   if (include.id) {
@@ -641,9 +713,10 @@ query.contributions.stats.project <- function(con, pid) {
 }
 
 ## Obtain a mapping between local and in-DB mail IDs
-query.mlid.map <- function(con, ml.id) {
+query.mlid.map <- function(con, ml.id, range.id) {
   dat <- dbGetQuery(con, str_c("SELECT id, mailThreadId FROM ",
-                               "mail_thread WHERE mlId=", ml.id))
+                               "mail_thread WHERE mlId=", ml.id,
+                               " AND releaseRangeId=", range.id))
 
   if (!is.null(dat)) {
     colnames(dat) <- c("db.id", "local.id")

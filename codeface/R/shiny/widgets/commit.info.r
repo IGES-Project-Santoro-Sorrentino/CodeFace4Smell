@@ -56,14 +56,26 @@ initWidget.widget.commit.info <- function(w) {
 # Render a Scatterplot
 renderWidget.widget.commit.info.splom <- function(w) {
   renderPlot({
-    gen.commits.splom(w$data()$cmt.info, w$data()$plot.types)
+    if (is.null(w$data()$cmt.info)) {
+      plot.new()
+      text(0.5, 0.5, "No commit data available for this range", cex=1.2)
+      title("Commit Information - Scatterplot")
+    } else {
+      gen.commits.splom(w$data()$cmt.info, w$data()$plot.types)
+    }
   })
 }
 
 # Render Correlations
 renderWidget.widget.commit.info.corrgram <- function(w) {
   renderPlot({
-    gen.commits.corrgram(w$data()$cmt.info, w$data()$plot.types)
+    if (is.null(w$data()$cmt.info)) {
+      plot.new()
+      text(0.5, 0.5, "No commit data available for this range", cex=1.2)
+      title("Commit Information - Correlations")
+    } else {
+      gen.commits.corrgram(w$data()$cmt.info, w$data()$plot.types)
+    }
   })
 }
 
@@ -99,17 +111,23 @@ initWidget.widget.commit.doc <- function(w) {
 
 renderWidget.widget.commit.doc <- function(w) {
   renderPlot({
-    dat <- melt(data.frame(cycle=w$dat()$cycle, commitmsg=w$dat()$percentdoc, signoffs=w$dat()$percentsignoffs))
-    dat$variable <- revalue(dat$variable, c(commitmsg="% documented", signoffs="% signed off"))
-    g <- ggplot(dat, aes(x=cycle, y=value, group=variable, colour=variable)) +
-                geom_line() +
-                scale_y_continuous(labels = percent_format()) +
-                expand_limits(y=1) +
-                expand_limits(y=0) +
-                scale_colour_manual(values=c("red","blue"), name="") +
-                xlab("Release range") +
-                ylab("Percent") +
-                theme(axis.text.x = element_text(angle = 30, hjust = 1, size=7), legend.position="bottom")
-    print(g)
+    if (is.null(w$dat()) || (nrow(w$dat()) == 0)) {
+      plot.new()
+      text(0.5, 0.5, "No commit documentation data available", cex=1.2)
+      title("Commit Documentation")
+    } else {
+      dat <- melt(data.frame(cycle=w$dat()$cycle, commitmsg=w$dat()$percentdoc, signoffs=w$dat()$percentsignoffs))
+      dat$variable <- revalue(dat$variable, c(commitmsg="% documented", signoffs="% signed off"))
+      g <- ggplot(dat, aes(x=cycle, y=value, group=variable, colour=variable)) +
+                  geom_line() +
+                  scale_y_continuous(labels = percent_format()) +
+                  expand_limits(y=1) +
+                  expand_limits(y=0) +
+                  scale_colour_manual(values=c("red","blue"), name="") +
+                  xlab("Release range") +
+                  ylab("Percent") +
+                  theme(axis.text.x = element_text(angle = 30, hjust = 1, size=7), legend.position="bottom")
+      print(g)
+    }
   })
 }

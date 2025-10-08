@@ -31,7 +31,19 @@ source("../../vis.ports.r", chdir=TRUE)
 
 ## Global variables
 conf <- config.from.args(require.project=FALSE)
-projects.list <- query.projects(conf$con)
+
+## Function to get projects list (can be called to refresh)
+get.projects.list <- function() {
+  tryCatch({
+    query.projects(conf$con)
+  }, error = function(e) {
+    logwarn(paste("Error loading projects:", e$message))
+    return(list(id=c(), name=c()))
+  })
+}
+
+## Initial projects list (will be refreshed as needed)
+projects.list <- get.projects.list()
 
 ## breadcrumb
 source("../nav/breadcrumb.shiny.r", chdir = TRUE)
@@ -56,12 +68,40 @@ common.server.init <- function(input, output, session, app.name) {
   choices <- projects.choices(projects.list)
 
   ## returns a reactive list containing selected projects
-  selected <- reactive({ projects.selected( projects.list, input$qacompareids) })
+  selected <- reactive({ 
+    # Get projects from cookie
+    cookie.projects <- projects.selected( projects.list, input$qacompareids)
+    
+    # Get current project from URL
+    current.project <- pid()
+    if (!is.null(current.project) && length(current.project) == 1 && !is.na(as.numeric(current.project))) {
+      current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project)]
+      if (length(current.project.name) > 0) {
+        # Combine cookie projects with current project, removing duplicates
+        all.projects <- unique(c(cookie.projects, current.project.name))
+        return(all.projects)
+      }
+    }
+    
+    return(cookie.projects)
+  })
   selected.pids <- reactive({
-    if (is.null(input$qacompareids)) {
-      return(list()) }
-    else {
-      unlist(strsplit(input$qacompareids,",")) }
+    # Get project IDs from cookie
+    cookie.pids <- if (is.null(input$qacompareids)) {
+      list()
+    } else {
+      unlist(strsplit(input$qacompareids,","))
+    }
+    
+    # Get current project ID from URL
+    current.project <- pid()
+    if (!is.null(current.project) && length(current.project) == 1 && !is.na(as.numeric(current.project))) {
+      # Combine cookie PIDs with current project, removing duplicates
+      all.pids <- unique(c(cookie.pids, as.character(current.project)))
+      return(all.pids)
+    }
+    
+    return(cookie.pids)
   })
 
   ## Create project comparison user interface
@@ -101,18 +141,37 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
     selected = allpids$selected  # to be used for comparisons
 
     observe({
-      if (!is.vector(pid())) {
+      current_pid <- pid()
+      if (is.null(current_pid)) {
+        loginfo("No project ID specified - showing all projects")
+        return()
+      }
+      
+      if (!isTRUE(is.vector(current_pid))) {
         stop("No projectid parameter in URL")
-      } else if (is.na(as.numeric(pid()))) {
+      } else if (length(current_pid) > 1) {
+        # Handle case where pid() returns multiple values - take the first one
+        current_pid <- current_pid[1]
+        logwarn(paste("Multiple project IDs found, using first one:", current_pid))
+      }
+      
+      if (is.na(as.numeric(current_pid))) {
         stop("projectid URL parameter is empty")
       }
-      loginfo(paste("New Project ID: ", pid()))
+      loginfo(paste("New Project ID: ", current_pid))
     })
 
     range.id <- reactive({input$view})
 
     if (is.null(widgets)) {
-      widgets <- isolate({unlist(strsplit(allpids$args.list()$widget,","))})
+      widget_param <- isolate(allpids$args.list()$widget)
+      if (is.null(widget_param)) {
+        widgets <- character(0)
+      } else {
+        # Handle case where widget_param might be a vector by taking the first element
+        widget_string <- if (length(widget_param) > 1) widget_param[1] else widget_param
+        widgets <- unlist(strsplit(widget_string, ","))
+      }
     }
 
 
@@ -147,7 +206,12 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
       id.panel <- paste("widget", i, project, "panel", sep="_")
       id.ui <- paste("widget", i, project, "ui", sep="_")
       id.help <- paste("widget", i, project, "help", sep="_")
-      project.title <- projects.list$name[[which(projects.list$id == project)]]
+      project.idx <- which(projects.list$id == project)
+      project.title <- if (length(project.idx) > 0) {
+        projects.list$name[[project.idx]]
+      } else {
+        paste("Project", project)
+      }
       if (is.null(widgets.by.id[[id.widget]])) {
         w <- initialize.widget(newWidget(cls, reactive({project}), reactive({input[[paste("view", project, sep="")]]}), selected))
         widgets.by.id[[id.widget]] <<- w
@@ -158,7 +222,7 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
           choices <- listViews(w)()
           if (length(choices) > 1) {
             title <- if(project == pid()) { "View:" } else { paste("View (", project.title, "):", sep="") }
-            list(selectInput(paste("view", project, sep=""), h3(title), choices=choices))
+            list(selectInput(paste("view", project, sep=""), title, choices=choices))
           } else {
             list()
           }
@@ -182,9 +246,25 @@ detailPage <- function(app.name=NULL, widgets=NULL, additional.input=list()){
       if (!cls$compareable) {
         ## If the list of compared widgets changes, first make sure all widgets are there
         ## If we have projects to compare...
-        instance.ids <- reactive({lapply(selected(), function(project) {
-          make.or.reuse.widget(i, cls, project)
-        })})
+        instance.ids <- reactive({
+          # Get current project ID
+          current.project.id <- pid()
+          if (!is.null(current.project.id) && length(current.project.id) == 1 && !is.na(as.numeric(current.project.id))) {
+            current.project.name <- projects.list$name[projects.list$id == as.numeric(current.project.id)]
+            # Filter out the current project from selected projects to avoid duplicates
+            other.projects <- selected()[!selected() %in% current.project.name]
+          } else {
+            other.projects <- selected()
+          }
+          
+          lapply(other.projects, function(project) {
+            # Find project ID by name
+            project.id <- projects.list$id[projects.list$name == project]
+            if (length(project.id) > 0) {
+              make.or.reuse.widget(i, cls, project.id[1])
+            }
+          })
+        })
 
         output[[id]] <- renderUI({
           if (length(selected()) > 0) {

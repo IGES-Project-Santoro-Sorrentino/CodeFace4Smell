@@ -249,7 +249,9 @@ initWidget.widget.rangeid <- function(widget) {
   widget$range.ids <- reactive({
     range.ids <- query.range.ids.con(conf$con, widget$pid())
     # Set the names of the range IDs to human readable values
-    names(range.ids) <- widget$cycles()$cycle
+    # Ensure names are character strings to avoid %AND% errors
+    cycle.names <- as.character(widget$cycles()$cycle)
+    names(range.ids) <- cycle.names
     range.ids
   })
   ## Call the superclass here, since the views are now defined
@@ -276,7 +278,12 @@ widgetColor.default <- function(w) {
 
 ## Default widget title is the class human-readable name
 widgetTitle.default <- function(w) {
-  reactive({w$name})
+  reactive({
+    if (is.null(w$name) || length(w$name) == 0) {
+      return("Unknown Widget")
+    }
+    w$name
+  })
 }
 
 ## Default widget explanation is the widget class description
@@ -284,8 +291,12 @@ widgetExplanation.default <- function(w) {
   reactive({ widget.list[[w$main.class]]$description })
 }
 
+## Load Shiny library before sourcing widget files
+suppressPackageStartupMessages(library(shiny))
+suppressPackageStartupMessages(library(stringr))
+
 ## Include color scheme
-source("color.r")
+source("color.r", chdir=TRUE)
 
 ## Load all the widgets so that widget.list is populated
 source("widgets/commit.info.r", chdir=TRUE)

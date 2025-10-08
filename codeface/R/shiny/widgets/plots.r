@@ -17,7 +17,7 @@
 ## All Rights Reserved.
 
 suppressPackageStartupMessages(library(scales))
-source("../../ts_utils.r", chdir=TRUE)
+source("../../ts_utils.r")
 
 ## Visualise time series including release boundaries
 get.ts.data <- function(con, pid, name) {
@@ -54,7 +54,7 @@ do.ts.plot <- function(ts, boundaries, title, y.label, smooth, transform) {
   g <- ggplot(ts, aes(x=time, y=value)) + geom_point() +
     geom_vline(aes(xintercept=as.numeric(date.end), colour="red"),
                data=boundaries) +
-    stat_smooth(aes(group=1), size=1) +
+    stat_smooth(aes(group=1), linewidth=1) +
     scale_fill_manual(values = alpha(c("blue", "red"), .1)) +
     xlab("Time") + ylab(y.label) +
     ggtitle(title) +
@@ -74,7 +74,8 @@ createWidgetClass(
   "Can show different time series calculated for this project",
   size.x = 2,
   size.y = 1,
-  html = widget.plotOutput.html
+  html = widget.plotOutput.html,
+  detailpage=list(app="plots", topic="complexity")
 )
 
 initWidget.widget.timeseries <- function(w) {
@@ -124,8 +125,12 @@ listViews.widget.timeseries <- function(w) {
     if (is.null(w$plots)) {
       stop("listViews.widget.timeseries.plots called with uninitialized widget!")
     }
-    l <- w$plots()$id
-    names(l) <- w$plots()$name
+    plots_data <- w$plots()
+    if (is.null(plots_data) || nrow(plots_data) == 0) {
+      return(numeric(0))
+    }
+    l <- plots_data$id
+    names(l) <- as.character(plots_data$name)
     l
   })
 }

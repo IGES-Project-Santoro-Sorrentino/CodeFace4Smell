@@ -19,7 +19,7 @@ import sys
 from os import unlink
 from logging import getLogger, INFO, DEBUG
 from tempfile import NamedTemporaryFile
-from StringIO import StringIO
+from io import StringIO
 
 from codeface.logger import (set_log_level, start_logfile, stop_logfile,
         console_handler)
@@ -83,7 +83,7 @@ class TestLogger(unittest.TestCase):
             log.devinfo("Should be in logfile :-) ")
             log.warning("Should really be in logfile :-D ")
             stop_logfile(f.name)
-            contents = file(f.name).read()
+            contents = open(f.name).read()
             self.assertNotIn(":-(", contents)
             self.assertNotIn(":-P", contents)
             self.assertIn(":-)", contents)

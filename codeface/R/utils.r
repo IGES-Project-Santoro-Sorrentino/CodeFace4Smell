@@ -1,5 +1,8 @@
 # Some utility functions that can be loaded with source("utility.r")
 
+# Load required libraries
+suppressPackageStartupMessages(library(lubridate))
+
 # This file is part of Codeface. Codeface is free software: you can
 # redistribute it and/or modify it under the terms of the GNU General Public
 # License as published by the Free Software Foundation, version 2.
@@ -18,7 +21,30 @@
 # All Rights Reserved.
 
 ## Interpret an integer as timestamp from the UNIX epoch
-tstamp.to.POSIXct <- function(z) as.POSIXct(as.integer(z), origin="1970-01-01")
+## Also handle datetime strings in YYYY-MM-DD HH:MM:SS format
+tstamp.to.POSIXct <- function(z) {
+  # Check if z is already a POSIXct object
+  if (inherits(z, "POSIXct")) {
+    return(z)
+  }
+  
+  # Check if z is a character string (datetime format)
+  if (is.character(z)) {
+    # Try to parse as datetime string first
+    parsed <- ymd_hms(z, quiet=TRUE)
+    if (!any(is.na(parsed))) {
+      return(parsed)
+    }
+    # If that fails, try other common formats
+    parsed <- as.POSIXct(z, format="%Y-%m-%d %H:%M:%S")
+    if (!any(is.na(parsed))) {
+      return(parsed)
+    }
+  }
+  
+  # Fall back to Unix timestamp conversion
+  as.POSIXct(as.integer(z), origin="1970-01-01")
+}
 
 ## Convert a time series into a data frame
 ## The data frame contains the timestamps (index(ts)),
@@ -43,6 +69,17 @@ scale.data <- function(dat, .min=0, .max=1) {
   return(dat)
 }
 
+## Given two lists from and to, create an interleaved list.
+## interleave.lists(c(1,2,3), c(4,5,6)), for instance, delivers
+## c(1,4,2,5,3,6).
+do.interleave <- function(from, to) {
+    if (length(from) != length(to)) {
+        logwarn(paste("Warning: Length of lists to be interleaved differ,",
+                      "recycling will happen.", logger="utils"))
+    }
+    return(c(rbind(from, to)))
+}
+
 ## Given an igraph edge list (data frame with columns toId and fromId), create
 ## a weighted edge list, where the weight is the number of parallel edges.
 gen.weighted.edgelist <- function(edges) {
@@ -62,21 +99,45 @@ gen.weighted.edgelist <- function(edges) {
 ## Give a cluster identifier and (optionally) the page rank technique,
 ## (re)construct an igraph object from the DB
 construct.cluster <- function(con, cluster.id, technique=0) {
-  edges <- query.cluster.edges(con, cluster.id)
-  members <- query.cluster.members(con, cluster.id, prank=TRUE, technique=technique)
-
-  if (!all(unique(c(edges$toId, edges$fromId)) %in% members$person)) {
-    stop("Internal error: edges for non-existent persons in cluster ", cluster.id)
-  }
-
-  if (is.null(edges)) {
-    logwarn(paste("Duh: cluster without edges for id ", cluster.id, "?!\n"),
-            logger="util")
+  # Check if cluster.id is valid
+  if (is.null(cluster.id) || is.na(cluster.id) || cluster.id == "") {
+    logwarn(paste("Invalid cluster.id:", cluster.id))
     return(NULL)
   }
+  
+  tryCatch({
+    edges <- query.cluster.edges(con, cluster.id)
+    members <- query.cluster.members(con, cluster.id, prank=TRUE, technique=technique)
 
-  g <- graph.data.frame(edges, vertices=members)
-  return(g)
+    # Check if we have valid data
+    if (is.null(edges) || is.null(members) || nrow(members) == 0) {
+      logwarn(paste("No edges or members found for cluster", cluster.id))
+      return(NULL)
+    }
+
+    # Check if edges reference valid members
+    if (nrow(edges) > 0) {
+      edge.ids <- unique(c(edges$toId, edges$fromId))
+      member.ids <- members$personId
+      
+      if (!all(edge.ids %in% member.ids)) {
+        logwarn(paste("Some edges reference non-existent persons in cluster", cluster.id))
+        # Filter out invalid edges
+        valid.edges <- edges[edges$toId %in% member.ids & edges$fromId %in% member.ids,]
+        if (nrow(valid.edges) == 0) {
+          logwarn(paste("No valid edges remaining for cluster", cluster.id))
+          return(NULL)
+        }
+        edges <- valid.edges
+      }
+    }
+
+    g <- graph.data.frame(edges, vertices=members)
+    return(g)
+  }, error = function(e) {
+    logwarn(paste("Error constructing cluster", cluster.id, ":", e$message))
+    return(NULL)
+  })
 }
 
 
@@ -100,3 +161,82 @@ select.graphics.dev <- function(filename, size, format="png") {
   return(dev)
 }
 
+
+get.num.cores <- function() {
+  n.cores <- detectCores(logical=TRUE)
+  if (is.na(n.cores)) n.cores <- 2
+
+  return(n.cores)
+}
+
+
+perform.git.checkout <- function(repodir, commit.hash, code.dir, archive.file) {
+  # Ensure the code directory exists
+  if (!dir.exists(code.dir)) {
+    dir.create(code.dir, recursive=TRUE, showWarnings=FALSE)
+  }
+  
+  args <- str_c(" --git-dir=", repodir, " archive -o ", archive.file,
+                " --format=tar --prefix='code/' ", commit.hash)
+  
+  git_result <- system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE)
+  
+  # Check if git archive succeeded
+  if (!file.exists(archive.file)) {
+    stop("Git archive failed: archive file not created")
+  }
+
+  args <- str_c("-C ", code.dir, " -xf ", archive.file)
+  tar_result <- system(str_c("tar ", args), intern=TRUE, ignore.stderr=TRUE)
+  
+  # Check if tar extraction succeeded
+  if (!dir.exists(file.path(code.dir, "code"))) {
+    stop("Tar extraction failed: code directory not created")
+  }
+}
+
+## Return the content of a file at a given revision
+show.git.file <- function(repodir, commit.hash, file) {
+  args <- str_c(" --git-dir=", repodir, " show ", commit.hash, ":", file, sep="")
+  return(system(str_c("git", args), intern=TRUE, ignore.stderr=TRUE))
+}
+
+## Some helper functions to ensure that functions (and the
+## configuration parser) receive correct parameter values in the
+## conway analysis
+ensure.supported.artifact.type <- function(artifact.type) {
+    if(!(artifact.type %in% c("function", "file", "feature"))) {
+        stop(str_c("Internal error: Artifact type ", artifact.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.dependency.type <- function(dependency.type) {
+    if(!(dependency.type %in% c("co-change", "dsm", "feature_call", "semantic", "none"))) {
+        stop(str_c("Internal error: Dependency type ", dependency.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.quality.type <- function(quality.type) {
+    if(!(quality.type %in% c("corrective", "defect"))) {
+        stop(str_c("Internal error: Quality type ", quality.type,
+                   " is unsupported!"))
+    }
+}
+
+ensure.supported.communication.type <- function(communication.type) {
+    if(!(communication.type %in% c("mail", "jira", "mail+jira"))) {
+        stop(str_c("Internal error: Communication type ", communication.type,
+                   " is unsupported!"))
+    }
+}
+
+## Generate a directory name as basis for range-specific output files
+## Form: 001--abcdef-7fbd3d, i.e., the range id filled to three positions,
+## and the first 6 characters of start and end revision.
+gen.range.path <- function(i, cycle) {
+    revs <- strsplit(cycle, "-")[[1]]
+    return(str_c(str_pad(i, width=3, side="left", pad="0"), "--",
+                 substr(revs[1], 0, 6), "-", substr(revs[2], 0, 6), sep=""))
+}

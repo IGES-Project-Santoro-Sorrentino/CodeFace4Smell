@@ -7,146 +7,146 @@
  */
 
 body {
-    background-color: #FFF;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
+	background-color: #fff;
+	font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
 h1 {
-  margin-bottom: 12px;
-  text-align: left;
-  font-size: 30px;
-  font-weight: 400;
-  color: #000;
+	margin-bottom: 12px;
+	text-align: left;
+	font-size: 30px;
+	font-weight: 400;
+	color: #000;
 }
 
 a.link_details:after {
-  font-size: 12px;
-  font-weight: bold;
-  content: "details.." ;
-  margin-left: 10px;
-  margin-right: 10px;
+	font-size: 12px;
+	font-weight: bold;
+	content: "details..";
+	margin-left: 10px;
+	margin-right: 10px;
 }
 a.link_projects:after {
-  font-size: 12px;
-  font-weight: bold;
-  content: "projects.." ;
-  margin-left: 10px;
-  margin-right: 10px;
+	font-size: 12px;
+	font-weight: bold;
+	content: "projects..";
+	margin-left: 10px;
+	margin-right: 10px;
 }
 
 a {
-  color: #666666;
-  cursor: pointer;
+	color: #666666;
+	cursor: pointer;
 }
 a:visited {
-  color: #666666;
-  cursor: pointer;
+	color: #666666;
+	cursor: pointer;
 }
 a:hover {
-  color: #990000;
-  cursor: pointer;
-  text-decoration: none;
+	color: #990000;
+	cursor: pointer;
+	text-decoration: none;
 }
 
 .gridster .gs_w {
-  border-radius: 5px;
-  padding-top:0px;
-  padding-bottom:0px;
-  padding-left:0px;
-  padding-right:0px;
+	border-radius: 5px;
+	padding-top: 0px;
+	padding-bottom: 0px;
+	padding-left: 0px;
+	padding-right: 0px;
 }
 
 .gridster .gs_w.alert {
-  background-color: #D00;
-  color: #FFF;
+	background-color: #d00;
+	color: #fff;
 }
 
 .gridster .gs_w.warning {
-  background-color: #fc6;
-  color: #FFF;
+	background-color: #fc6;
+	color: #fff;
 }
 
-
 .status_output {
-  text-align: center;
-  line-height: normal;
+	text-align: center;
+	line-height: normal;
 }
 
 div .grid_title {
-  margin-top: 30px;
-  margin-bottom: 20px;
-  font-size: 22px;
-  line-height: 120%;
-  text-align: center;
+	margin-top: 30px;
+	margin-bottom: 20px;
+	font-size: 22px;
+	line-height: 120%;
+	text-align: center;
 }
 
 div .grid_bigtext {
-  font-weight: bold;
-  font-size: 80px;
+	font-weight: bold;
+	font-size: 80px;
 }
 
 div .grid_medtext {
-  font-weight: bold;
-  font-size: 40px;
+	font-weight: bold;
+	font-size: 40px;
 }
 
 div .widget_title {
-  margin-top: 2px;
-  margin-bottom: 2px;
-  font-size: 12px;
-  font-weight: bold;
-  text-align: center;
-  line-height: normal;
+	margin-top: 2px;
+	margin-bottom: 2px;
+	font-size: 12px;
+	font-weight: bold;
+	text-align: center;
+	line-height: normal;
 }
 
 div .widget_view_select {
-  margin-top: 0px;
-  margin-bottom: 0px;
-  width: 80%;
-  height: 16px;
-  padding: 0px 0px;
-  font-size: 12px;
-  text-align: right;
-  line-height: normal;
+	margin-top: 0px;
+	margin-bottom: 0px;
+	width: 80%;
+	height: 16px;
+	padding: 0px 0px;
+	font-size: 12px;
+	text-align: right;
+	line-height: normal;
 }
 
 div.title_bar td {
-  padding-top:5px;
+	padding-top: 5px;
 }
 
 div .title_bar {
-  position: absolute;
-  top: 0px;
-  left: 0px;
-  width: 100%;
-  height:25px;
-  z-index:98; /* must be less than the delete button */
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 5px 5px 0px 0px;
-  text-align: center;
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 100%;
+	height: 25px;
+	z-index: 98; /* must be less than the delete button */
+	background-color: rgba(0, 0, 0, 0.1);
+	border-radius: 5px 5px 0px 0px;
+	text-align: center;
 }
 
 div .link_bar {
-  position: absolute;
-  left: 0px;
-  bottom: 0px;
-  height:15px;
-  line-height: 10px;
-  width: 100%;
+	position: absolute;
+	left: 0px;
+	bottom: 0px;
+	height: 15px;
+	line-height: 10px;
+	width: 100%;
 }
 
 div.title_bar .control-label {
-  margin-bottom:0px;
+	margin-bottom: 0px;
 }
 
 div .content_box {
-  margin-top: 25px;
-  margin-bottom: 15px;
-  height: 90%;
-  width: 100%;
+	margin-top: 25px;
+	margin-bottom: 15px;
+	height: 90%;
+	width: 100%;
 }
 
 div .shiny-plot-output {
-  overflow:hidden;
+	overflow: hidden;
 }
+
 

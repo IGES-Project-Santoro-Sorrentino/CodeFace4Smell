@@ -49,19 +49,47 @@ fit.plot.linear <- function(pid, name, period.in.days) {
   ts.orig <- query.timeseries(conf$con, plot.id)
   ## Remove NA entries in the time series (where do they come from?
   ts.orig <- data.frame(value=ts.orig$value[!is.na(ts.orig$time)], time=ts.orig$time[!is.na(ts.orig$time)])
+  
+  ## Check if we have any data at all
+  if (nrow(ts.orig) == 0) {
+    return(list(rel.increase.per.year=NA, sigma=NA, fit.value.now=NA))
+  }
+  
   ts.x <- xts(x=ts.orig$value, order.by=ts.orig$time)
-  ## Restrict to given time period
-  ts.x <- ts.x[paste(ts.orig$time[length(ts.orig$time)] - period, "/", sep="")]
+  
+  ## Check if data is recent or historical
+  last.timestamp <- ts.orig$time[length(ts.orig$time)]
+  current.time <- as.POSIXct(Sys.time())
+  data.age.days <- as.numeric(difftime(current.time, last.timestamp, units="days"))
+  
+  ## If data is older than 365 days (historical), use all data
+  ## Otherwise, restrict to the specified period
+  if (data.age.days > 365) {
+    ts.x.period <- ts.x
+  } else {
+    ts.x.period <- ts.x[paste(last.timestamp - period, "/", sep="")]
+    ## If filtering removed too much data, use all available data
+    if (length(ts.x.period) < 2) {
+      ts.x.period <- ts.x
+    }
+  }
+  
   ## Summarize per week
-  ts <- apply.weekly(ts.x, function(x) { mean(x) })
+  ts <- apply.weekly(ts.x.period, function(x) { mean(x) })
   ts <- data.frame(time=index(ts), value=coredata(ts))
   ## Check if we have any data left
   if (length(ts$time) < 2) {
-    return(list(rel.increase.per.year=NA, sigma=NA))
+    return(list(rel.increase.per.year=NA, sigma=NA, fit.value.now=NA))
   }
+  ## Check if we have enough variance in the data to perform a meaningful fit
+  if (length(unique(ts$value)) == 1) {
+    ## All values are the same - no trend can be detected
+    return(list(rel.increase.per.year=0, sigma=0, fit.value.now=ts$value[1]))
+  }
+  
   ## Fit with linear model
   m1 <- lm(value ~ time, ts)
-  s <- summary(m1)
+  s <- suppressWarnings(summary(m1))  # Suppress perfect fit warnings
   #print(paste("Fit to", name))
   #print(s)
   increase <- s$coefficients[[2]]
@@ -114,13 +142,21 @@ figure.of.merit.communication <- function(pid) {
                                str_c("SELECT COUNT(*) FROM mail_thread ",
 			       "WHERE projectId=", pid))[[1]]
 
+  ## If no mail_thread entries, check for mail entries as fallback
+  n.mail.entries <- 0
+  if (n.mail.threads == 0) {
+    n.mail.entries <- dbGetQuery(conf$con,
+                                 str_c("SELECT COUNT(*) FROM mail ",
+                                       "WHERE projectId=", pid))[[1]]
+  }
+
   ml.plots <-  dbGetQuery(conf$con,
                           str_c("SELECT id, name FROM plots ",
                                 "WHERE projectId=", pid,
 			        " AND releaseRangeId IS NULL ",
 				" AND name LIKE '% activity'"))
 
-  if (n.mail.threads == 0 || nrow(ml.plots) == 0) {
+  if ((n.mail.threads == 0 && n.mail.entries == 0) || nrow(ml.plots) == 0) {
     return(list(status=status.error, why="No mailing list to analyse."))
   }
 
@@ -145,6 +181,9 @@ figure.of.merit.communication <- function(pid) {
   ## We therefore set the magnitude to zero, meaning "no detectable change"
   inc[sigma < 5] <- 0.0
   ## Select the most active mailing list
+  if (length(val) == 0 || all(is.na(val))) {
+    return(list(status=status.error, why="No valid mailing list activity data found."))
+  }
   max.index <- which.max(val)
   max.plot <- ml.plots$name[max.index]
   increase.per.year <- inc[max.index]
@@ -205,12 +244,37 @@ figure.of.merit.complexity <- function(pid) {
                                        "NOT(name='understand_raw') AND ",
                                        "projectId=", pid))
 
-  if (nrow(understand.plots) == 0) {
-    return(list(status=status.error, why="No complexity analysis plots were found.")) # Cannot return figure of merit if no complexity analysis was done
+  ## Also check for sloccount plots
+  sloccount.plots <- dbGetQuery(conf$con,
+                                str_c("SELECT id, name FROM plots WHERE ",
+                                      "name LIKE 'sloccount%' AND ",
+                                      "NOT(name='sloccount') AND ",
+                                      "projectId=", pid))
+
+  ## If no plots found, check if we have raw complexity data
+  if (nrow(understand.plots) == 0 && nrow(sloccount.plots) == 0) {
+    ## Check if we have any complexity data at all (from understand_raw, sloccount, or other sources)
+    understand.data <- dbGetQuery(conf$con,
+                                  str_c("SELECT COUNT(*) as count FROM understand_raw WHERE ",
+                                        "plotId IN (SELECT id FROM plots WHERE projectId=", pid, 
+                                        " AND name='understand_raw')"))
+    
+    sloccount.data <- dbGetQuery(conf$con,
+                                 str_c("SELECT COUNT(*) as count FROM sloccount_ts WHERE ",
+                                       "plotId IN (SELECT id FROM plots WHERE projectId=", pid, 
+                                       " AND name='sloccount')"))
+    
+    if (understand.data$count > 0 || sloccount.data$count > 0) {
+      return(list(status=status.warn, why="Complexity analysis data is available but time series plots have not been generated yet. Please run the time series analysis."))
+    } else {
+      return(list(status=status.error, why="No complexity analysis data was found."))
+    }
   }
 
-  ## Do a linear fit over the last year
-  res <- lapply(understand.plots$name, function(name) {
+  ## Do a linear fit over the last year for all complexity plots
+  all.plots <- rbind(understand.plots, sloccount.plots)
+  
+  res <- lapply(all.plots$name, function(name) {
     fit.plot.linear(pid, name, 365)
   })
   sigma <- sapply(res, function(x) {x$sigma})
@@ -230,18 +294,18 @@ figure.of.merit.complexity <- function(pid) {
   inc[sigma < 5] <- 0.0
   max.val <- max(inc)
   if (max.val < -0.05) {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.good,
          why=str_c("The Complexity metric ", max.plot, " is falling by ~", format(max.val*100, digits=1), "% per year. This seems to be a good sign for maintainability."))
   } else if (max.val < 0.05) {
     list(status=status.good,
          why=str_c("The maximal complexity metrics have not changed much in the last year."))
   } else if (max.val < 0.40) {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.warn,
          why=str_c("The Complexity metric ", max.plot, " is increasing by ~", format(max.val*100, digits=1), "% per year. This may make it harder to maintain the project."))
   } else {
-    max.plot <- understand.plots$name[which.max(inc)]
+    max.plot <- all.plots$name[which.max(inc)]
     list(status=status.bad,
          why=str_c("The Complexity metric ", max.plot, " is increasing by ~", format(max.val*100, digits=1), "% per year. This is quite a lot and may make maintenance hard."))
   }

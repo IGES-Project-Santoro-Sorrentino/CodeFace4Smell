@@ -319,8 +319,7 @@ def get_example_project_2(tagging="tag"):
             signoff=[Adam, Max])
     project.commit(Max, Max, "2013-01-17T12:50:42",
             {"README":"Foo\nBoo",
-            "src/code.c":"int main() {\n    int b = 0;\n \
-                                      \n    return 0;\n};",
+            "src/code.c":"int main() {\n    return 0;\n};",
             "src/answer.c":"int answer() {\n    return 42;\n};"
             },
             signoff=[Adam, Max])

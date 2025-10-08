@@ -13,6 +13,9 @@
 #
 # Copyright 2013 by Siemens AG, Johannes Ebke <johannes.ebke.ext@siemens.com>
 
+## Load required libraries
+library(htmltools)
+
 ## Here follow lists of Unicode symbols which are useful as status indicators
 ##
 ## Weather-type indicators, in order of severity
@@ -20,10 +23,10 @@
 ## http://de.wikipedia.org/wiki/Unicodeblock_Verschiedene_Symbole
 
 make.symbol <- function(unicode.hex) {
-  div(style="font-family: symbola; display: inline; font-weight: 500;", 
-      HTML(paste("&#",unicode.hex,sep="")))
-  ## Uncomment this to make the example html file
-  #intToUtf8(unicode.hex)
+  # Convert hex to actual Unicode character
+  unicode.char <- intToUtf8(unicode.hex)
+  # Return just the unicode character for now
+  unicode.char
 }
 
 symbol.weather.sunny <- make.symbol(0x1f323)
@@ -156,9 +159,9 @@ symbol.timeseries <- make.symbol(0x1f4c8) # chart
 symbol.basics <- make.symbol(0x1F481) # Information desk person
 #symbol.basics <- make.symbol(0x1F4ca) ## alternative: bar chart
 
-#symbol.communication <- make.symbol(0x1f4e1)
+symbol.communication <- make.symbol(0x1f4e1)
 #symbol.communication <- make.symbol(0x1f4ac) ## alternative communication, speech bubble
-symbol.communication <- make.symbol(0x1f5eb) ## alternative communication, speech bubble
+#symbol.communication <- make.symbol(0x1f5eb) ## alternative communication, speech bubble
 
 #symbol.collaboration <- make.symbol(0x21c4) ## alternative collaboration, arrows
 symbol.collaboration <- make.symbol(0x1f465) ## Two persons

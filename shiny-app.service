@@ -1,0 +1,15 @@
+[Unit]
+Description=CodeFace Shiny App
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/codeface/shiny-apps/sample-app
+ExecStart=/usr/bin/R --slave -e "shiny::runApp(host = '0.0.0.0', port = 8081)"
+Restart=always
+RestartSec=10
+Environment=R_LIBS=/usr/local/lib/R/site-library
+
+[Install]
+WantedBy=multi-user.target

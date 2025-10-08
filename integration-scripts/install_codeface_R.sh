@@ -2,14 +2,77 @@
 
 echo "Providing R libraries"
 
-sudo DEBIAN_FRONTEND=noninteractive apt-get -qqy install r-base r-base-dev r-cran-ggplot2 r-cran-tm \
-	r-cran-tm.plugin.mail r-cran-optparse r-cran-igraph r-cran-zoo r-cran-xts \
-	r-cran-lubridate r-cran-xtable r-cran-reshape r-cran-wordnet \
-	r-cran-stringr r-cran-yaml r-cran-plyr r-cran-scales r-cran-gridExtra \
-	r-cran-scales r-cran-RMySQL r-cran-RJSONIO r-cran-RCurl r-cran-mgcv \
-	r-cran-shiny r-cran-dtw r-cran-httpuv r-cran-png \
-	r-cran-rjson r-cran-lsa r-cran-testthat r-cran-arules r-cran-data.table \
-	r-cran-ineq libx11-dev libssh2-1-dev r-bioc-biocinstaller
+apt-get update && apt-get install -yy \
+    libxml2-dev \
+    libgit2-dev \
+    libssl-dev \
+    libglpk-dev \
+    r-base \
+    r-base-dev \
+    libx11-dev \
+    libssh2-1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    libgsl-dev \
+    graphviz \
+    libmysqlclient-dev \
+    libcurl4-openssl-dev \
+    libudunits2-dev \
+    libgraphviz-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-sudo Rscript packages.R
+# Lista dei pacchetti da verificare
+packages=(
+    libxml2-dev
+    libgit2-dev
+    libssl-dev
+    libglpk-dev
+    r-base
+    r-base-dev
+    libx11-dev
+    libssh2-1-dev
+    zlib1g-dev
+    libharfbuzz-dev
+    libfribidi-dev
+    libfreetype6-dev
+    libpng-dev
+    libgdal-dev
+    libgeos-dev
+    libproj-dev
+    libgsl-dev
+    graphviz
+    libmysqlclient-dev
+    libcurl4-openssl-dev
+    libudunits2-dev
+    libgraphviz-dev
+)
 
+missing=()
+for pkg in "${packages[@]}"; do
+    dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+done
+
+if [ ${#missing[@]} -ne 0 ]; then
+    echo -e "\033[31m❌ I seguenti pacchetti NON sono stati installati correttamente:\033[0m"
+    for pkg in "${missing[@]}"; do
+        echo "  - $pkg"
+    done
+    exit 1
+else
+    echo -e "\033[32m✔ Tutti i pacchetti sono installati correttamente\033[0m"
+fi
+
+echo "Setting locale..."
+locale-gen en_US.UTF-8
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US:en
+export LC_ALL=en_US.UTF-8
+
+# echo "🔑 Adding CRAN GPG key and repository for R 4.x..."
+# apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 'E298A3A825C0D65DFD57CBB651716619E084DAB9'
+# add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran40/'

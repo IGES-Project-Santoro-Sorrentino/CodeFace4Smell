@@ -17,16 +17,30 @@
 ## All Rights Reserved.
 
 ## This file should contain the overview widgets for the main dashboard
-source("../symbols.r", chdir=TRUE)
-source("../figures.of.merit.r", chdir=TRUE)
+source("../symbols.r")
+source("../figures.of.merit.r")
 
 combine.status <- function(status.list) {
   status.individual <- c(unlist(status.list))
+  
+  # Filter out error statuses and ensure we have numeric values
   status.individual <- status.individual[!(as.integer(status.individual) == as.integer(status.error))]
+  
   if (length(status.individual) == 0) {
     status.error
   } else {
-    as.status(status.codes[mean(status.individual)])
+    # Convert to numeric and handle any non-numeric values
+    status.numeric <- suppressWarnings(as.numeric(status.individual))
+    status.numeric <- status.numeric[!is.na(status.numeric)]
+    
+    if (length(status.numeric) == 0) {
+      # If no valid numeric values, return error status
+      status.error
+    } else {
+      # Calculate mean of valid numeric values
+      mean.status <- mean(status.numeric)
+      as.status(status.codes[round(mean.status)])
+    }
   }
 }
 
@@ -37,6 +51,9 @@ symbols.processing.status <- symbols.weather
 symbols.project.status <- symbols.emotion
 
 as.color <- function(status) {
+  if (is.null(status) || length(status) == 0 || !status %in% status.codes) {
+    return(status.codes.colors[[which(status.codes == "error")]])
+  }
   status.codes.colors[[which(status.codes == status)]]
 }
 
@@ -115,8 +132,8 @@ createWidgetClass(
   "Project Processing Status", "Short, one-widget project processing status",
   c("invisible"),
   1, 1,
-  html=htmlOutput,
-  detailpage=list()
+  html=shiny::htmlOutput,
+  detailpage=list(app="dashboard", topic="overview")
 )
 
 initWidget.widget.overview.processing <- function(w) {
@@ -137,7 +154,16 @@ initWidget.widget.overview.processing <- function(w) {
 renderWidget.widget.overview.processing <- function(w) {
   renderUI({
     ## Take minimum status as combined status
-    combined.status <- status.codes[mean(c(unlist(w$status())))]
+    status.values <- unlist(w$status())
+    status.numeric <- suppressWarnings(as.numeric(status.values))
+    status.numeric <- status.numeric[!is.na(status.numeric)]
+    
+    if (length(status.numeric) == 0) {
+      combined.status <- status.error
+    } else {
+      combined.status <- status.codes[round(mean(status.numeric))]
+    }
+    
     indicator.summary <- symbols.processing.status[[which(names(symbols.processing.status) == combined.status)]]
 
     indicator.commits <- make.indicator(symbol.commit, as.color(w$status()$commits))
@@ -162,7 +188,17 @@ renderWidget.widget.overview.processing <- function(w) {
 
 widgetColor.widget.overview.processing <- function(w) {
   ## Also consider errors as "bad"
-  reactive({as.color(status.codes[mean(c(unlist(w$status())))])})
+  reactive({
+    status.values <- unlist(w$status())
+    status.numeric <- suppressWarnings(as.numeric(status.values))
+    status.numeric <- status.numeric[!is.na(status.numeric)]
+    
+    if (length(status.numeric) == 0) {
+      as.color(status.error)
+    } else {
+      as.color(status.codes[round(mean(status.numeric))])
+    }
+  })
 }
 
 
@@ -172,7 +208,7 @@ createWidgetClass(
   "Project Summary", "Short, one-widget project summary",
   NULL, # no topical restrictions
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="overview")
 )
 
@@ -180,12 +216,47 @@ initWidget.widget.overview.project <- function(w) {
   # Call superclass
   w <- NextMethod(w)
   w$status <- reactive({
-    list(
-      collaboration = figure.of.merit.collaboration(w$pid())$status,
-      construction = figure.of.merit.construction(w$pid())$status,
-      communication = figure.of.merit.communication(w$pid())$status,
-      complexity = figure.of.merit.complexity(w$pid())$status
-    )
+    # Safely get status values with error handling
+    tryCatch({
+      list(
+        collaboration = tryCatch({
+          result <- figure.of.merit.collaboration(w$pid())
+          if (is.null(result) || is.null(result$status)) status.error else result$status
+        }, error = function(e) {
+          loginfo(paste("Error getting collaboration status:", e$message))
+          status.error
+        }),
+        construction = tryCatch({
+          result <- figure.of.merit.construction(w$pid())
+          if (is.null(result) || is.null(result$status)) status.error else result$status
+        }, error = function(e) {
+          loginfo(paste("Error getting construction status:", e$message))
+          status.error
+        }),
+        communication = tryCatch({
+          result <- figure.of.merit.communication(w$pid())
+          if (is.null(result) || is.null(result$status)) status.error else result$status
+        }, error = function(e) {
+          loginfo(paste("Error getting communication status:", e$message))
+          status.error
+        }),
+        complexity = tryCatch({
+          result <- figure.of.merit.complexity(w$pid())
+          if (is.null(result) || is.null(result$status)) status.error else result$status
+        }, error = function(e) {
+          loginfo(paste("Error getting complexity status:", e$message))
+          status.error
+        })
+      )
+    }, error = function(e) {
+      loginfo(paste("Error in widget.overview.project status:", e$message))
+      list(
+        collaboration = status.error,
+        construction = status.error,
+        communication = status.error,
+        complexity = status.error
+      )
+    })
   })
   return(w)
 }
@@ -224,11 +295,26 @@ widgetExplanation.widget.overview.project <- function(w) {
   reactive({
     print("--------------------")
     cs <- combine.status(w$status())
-    error <- names(w$status()[w$status() == as.integer(status.error)])
-    good <- names(w$status()[w$status() == as.integer(status.good)])
-    warn <- names(w$status()[w$status() == as.integer(status.warn)])
-    bad <- names(w$status()[w$status() == as.integer(status.bad)])
-    if (all(w$status() == status.good)) {
+    
+    # Safely extract status values and handle NULL cases
+    status.list <- w$status()
+    if (is.null(status.list) || (length(status.list) == 0)) {
+      return("No status information available for this project.")
+    }
+    
+    # Convert status values to integers safely
+    status.int <- lapply(status.list, function(x) {
+      if (is.null(x)) return(NA)
+      suppressWarnings(as.integer(x))
+    })
+    
+    # Filter out NA values and get names
+    error <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.error)]
+    good <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.good)]
+    warn <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.warn)]
+    bad <- names(status.int)[!is.na(status.int) & status.int == as.integer(status.bad)]
+    
+    if (isTRUE(all(!is.na(status.int))) && isTRUE(all(status.int == as.integer(status.good)))) {
       return("This project has good marks in all categories and is fully analysed.")
     }
     res <- list()
@@ -256,7 +342,7 @@ createWidgetClass(
   "Communication", "Information on how developers communicate",
   c("overview", "communication"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="communication")
 )
 
@@ -265,7 +351,7 @@ createWidgetClass(
   "Collaboration", "Information on how developers collaborate",
   c("overview", "collaboration"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="collaboration")
 )
 
@@ -274,7 +360,7 @@ createWidgetClass(
   "Complexity", "Information on code complexity",
   c("overview", "complexity"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="complexity")
 )
 
@@ -283,7 +369,7 @@ createWidgetClass(
   "Construction", "Information on the construction and architecture of the project",
   c("overview", "construction"),
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="construction")
 )
 

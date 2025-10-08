@@ -21,7 +21,7 @@
 detailpage <- list(name="widget.ir.details.receiving,widget.ir.details.writing",
                    title="Initiation-Response details")
 
-source("../../ml/init.response.r", chdir=TRUE)
+source("../../ml/init.response.r")
 
 createWidgetClass(
   class=c("widget.ir"),

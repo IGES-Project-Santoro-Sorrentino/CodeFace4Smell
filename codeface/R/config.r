@@ -21,6 +21,7 @@ suppressPackageStartupMessages(library(logging))
 basicConfig()
 
 source("db.r")
+source("utils.r")
 
 logdebug.config <- function(conf) {
   ## Log the contents of a conf object to the debug stream
@@ -60,15 +61,14 @@ load.config <- function(global.file, project.file=NULL) {
     conf$dbport <- as.integer(conf$dbport)
   }
 
-  if(is.null(conf$understand)) {
-    conf$understand <- FALSE
-  }
-
-  if(is.null(conf$sloccount)) {
-    conf$sloccount <- FALSE
-  }
-
   if (is.null(project.file)) {
+      if(is.null(conf$understand)) {
+        conf$understand <- FALSE
+      }
+
+      if(is.null(conf$sloccount)) {
+        conf$sloccount <- FALSE
+      }
       return(conf)
   }
   logdevinfo(paste("Loading project config file '", project.file, "'", sep=""),
@@ -78,7 +78,17 @@ load.config <- function(global.file, project.file=NULL) {
   }
 
   ## Append project configuration to conf
-  conf <- c(conf, yaml.load_file(project.file))
+  project_conf <- yaml.load_file(project.file)
+  conf <- c(conf, project_conf)
+  
+  ## Apply defaults only after merging, if the fields are still null
+  if(is.null(conf$understand)) {
+    conf$understand <- FALSE
+  }
+
+  if(is.null(conf$sloccount)) {
+    conf$sloccount <- FALSE
+  }
 
   if (is.null(conf$project) || is.null(conf$repo)) {
     stop("Malformed configuration: Specify project and repository!\n")
@@ -110,11 +120,35 @@ load.config <- function(global.file, project.file=NULL) {
     stop("Malformed configuration: Revision and rcs lists must have same length!")
   }
 
+  if (!is.null(conf$artifactType)) {
+      ensure.supported.artifact.type(conf$artifactType)
+  } else {
+      conf$artifactType <- "file"
+  }
+
+  if (!is.null(conf$dependencyType)) {
+      ensure.supported.dependency.type(conf$dependencyType)
+  } else {
+      conf$dependencyType <- "none"
+  }
+
+  if (!is.null(conf$qualityType)) {
+      ensure.supported.quality.type(conf$qualityType)
+  } else {
+      conf$qualityType <- "corrective"
+  }
+
+  if (!is.null(conf$communicationType)) {
+      ensure.supported.communication.type(conf$communicationType)
+  } else {
+      conf$communicationType <- "mail"
+  }
+
   return(conf)
 }
 
 ## Set the default codeface conf relative to this file
-default.codeface.conf <- normalizePath("../../codeface.conf")
+default.codeface.conf <- "/codeface/codeface.conf"
 ## Set the default log file
 default.codeface.log <- str_c(normalizePath("../../log"), "/codeface.log.R.", Sys.getpid())
 
@@ -136,7 +170,9 @@ config.from.args <- function(positional.args=list(), extra.args=list(),
     make_option(c("-j", "--jobs"), type="integer", default=1,
                 help="Number of parallel jobs for analysis"),
     make_option("--profile", help="Measure and store profiling data",
-                action="store_true", default=FALSE)
+                action="store_true", default=FALSE),
+    make_option("--use-corpus", help="Re-use the corpus file that have been generated before",
+                dest="use_corpus", action="store_true", default=FALSE)
   ), extra.args)
 
   ## Note that positional_arguments=TRUE even if no positional arguments are
@@ -178,6 +214,7 @@ config.from.args <- function(positional.args=list(), extra.args=list(),
   ## Store other options that need to be propagated upwards
   conf$profile <- opts$profile
   conf$jobs <- opts$jobs
+  conf$use_corpus <- opts$use_corpus
 
   logdebug.config(conf)
   return(conf)

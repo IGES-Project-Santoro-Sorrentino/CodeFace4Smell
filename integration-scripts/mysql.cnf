@@ -1,0 +1,15 @@
+[mysqld]
+# Enable local infile for R scripts
+local_infile = 1
+
+# Other recommended settings for codeface
+default_authentication_plugin = mysql_native_password
+sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO"
+
+[mysql]
+# Enable local infile on client side
+local_infile = 1
+
+[client]
+# Enable local infile on client side
+local_infile = 1

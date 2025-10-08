@@ -1,6 +1,6 @@
 ## This file is part of Codeface. Codeface is free software: you can
 ## redistribute it and/or modify it under the terms of the GNU General Public
-## License as published by the Free Software Foundation, version 2.
+## License as published by the GNU Free Software Foundation, version 2.
 ##
 ## This program is distributed in the hope that it will be useful, but WITHOUT
 ## ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -17,6 +17,15 @@
 ##
 ## Software Project dashboard (server.r)
 ##
+
+## Load dashboard configuration with fallbacks
+if (file.exists('../../dashboard.config.r')) {
+  cat('Loading dashboard configuration...\n')
+  source('../../dashboard.config.r')
+  cat('Dashboard configuration loaded successfully!\n')
+} else {
+  cat('Warning: dashboard.config.r not found\n')
+}
 
 ## generate a unique name to be added to list
 ## template used is: "prefix<integer>"
@@ -63,6 +72,17 @@ widgetbase.output.selectview <- function(w, id) {
   inputView.id.local <- paste(id, "_selectedview",sep="")
   title <- div(id = w$titleid, class = "shiny-text-output widget_title")
 
+  # Ensure selected is properly formatted for selectInput
+  # Fix the logical coercion issue by ensuring selected is a single value
+  if (is.null(myselected) || length(myselected) == 0) {
+    myselected <- NULL
+  } else if (length(myselected) == 1) {
+    myselected <- as.character(myselected)
+  } else {
+    # If multiple values, take the first one
+    myselected <- as.character(myselected[1])
+  }
+
   selector <- selectInput(inputView.id.local, "",
                                 choices = mychoices,
                                 selected = myselected)
@@ -96,7 +116,15 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
     
     ## reactive assignments (can be done in advance)
     output[[id]] <- renderWidget(inst)
-    output[[titleOutput.id]] <- renderText(paste(projects.list$name[[which(projects.list$id == pid())]], widgetTitle(inst)(), sep=" / "))
+    output[[titleOutput.id]] <- renderText({
+      project.idx <- which(projects.list$id == pid())
+      project.name <- if (length(project.idx) > 0) {
+        projects.list$name[[project.idx]]
+      } else {
+        paste("Project", pid())
+      }
+      paste(project.name, widgetTitle(inst)(), sep=" / ")
+    })
     loginfo(paste("Finished initialising new widget:", inst$name))
 
     ## build ui header
@@ -112,7 +140,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
     ## Used to link from specific topic to the detail page
     if (!is.null(widget.class$detailpage$name)) {
       name <- widget.class$detailpage$name
-      link <- paste("../details/?projectid=", isolate(pid()), "&widget=", name, "&topic=", isolate({topic()}), sep="")
+      link <- paste("../details?projectid=", isolate(pid()), "&widget=", name, "&topic=", isolate({topic()}), sep="")
       
       ## TODO use a details icon instead
       detail.link <- a(class="link_details", href=link, "")
@@ -123,7 +151,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
       ## Used to link from project-specific overview to a
       ## category (for instance, to collaboration)
       app <- widget.class$detailpage$app
-      link <- paste("../", app, "/?projectid=", isolate(pid()), "&topic=",
+      link <- paste("../", app, "?projectid=", isolate(pid()), "&topic=",
                     widget.class$detailpage$topic, sep="")
       
       detail.link <- a(class="link_details", href=link, "")
@@ -174,8 +202,7 @@ widgetbase.output <- function(input, output, id, widget.class, topic, pid, size_
 ## Filter Widget List (remove widgets that take too long to load)
 ##
 widget.list.filtered <- widget.list[
-  names(widget.list) != "widget.commit.structure.mds" &
-    names(widget.list) != "widget.punchcard.ml"
+  names(widget.list) != "widget.commit.structure.mds"
   ]
 
 ##
@@ -241,6 +268,25 @@ shinyServer(function(input, output, session) {
   session$onSessionEnded(function() {
     print("Session ended.")
     #if (dbDisconnect(conf$con)) cat("Database connection closed.")
+  })
+
+  ## Handle refresh button click
+  ## When clicked, reload projects from database and refresh the page
+  observeEvent(input$refreshProjects, {
+    loginfo("Refresh button clicked - reloading projects list")
+    
+    # Refresh projects list from database
+    new.projects <- get.projects.list()
+    old.count <- length(projects.list$id)
+    new.count <- length(new.projects$id)
+    
+    # Update global projects list
+    projects.list <<- new.projects
+    
+    loginfo(paste("Projects refreshed: old count =", old.count, ", new count =", new.count))
+    
+    # Reload the page to show updated projects
+    session$sendCustomMessage(type = "reloadPage", message = list())
   })
 
   ## Url parameter String and Parameter List (reactive statements)
@@ -323,14 +369,17 @@ shinyServer(function(input, output, session) {
       }
       cls <- widget.list[[cls.name]]
       widget.config <- list(
-        widgets=lapply(projects.list$id, function(pid) {
-          w <- list(col = 1, row = 1,
+        widgets=lapply(seq_along(projects.list$id), function(i) {
+          pid <- projects.list$id[i]
+          # Position widgets in a grid: each widget gets its own column
+          w <- list(col = i, row = 1,
                size_x = cls$size.x, size_y = cls$size.y,
-               id = paste("widget",pid,sep=""),
+               id = paste("widget",pid,"_",cls.name,sep=""),
                cls = cls.name,
                pid = pid)
           #force(w)
           #str(w)
+          cat("DEBUG: Widget config for project", pid, "-> ID:", w$id, "Position: (", w$col, ",", w$row, ")\n")
           w
         })
       )
@@ -397,6 +446,7 @@ shinyServer(function(input, output, session) {
     
     ## Build widget using the widgetbase.output builder
     loginfo(paste("Creating widget from config: ", w$id, "for classname: ", w$cls ))
+    cat("DEBUG: Creating widget with ID:", w$id, "for project:", w$pid, "at position (", w$col, ",", w$row, ")\n")
     widget.classname <- as.character(w$cls)
     widget.class <- widget.list[[widget.classname]]
 
@@ -405,7 +455,46 @@ shinyServer(function(input, output, session) {
 
     ## Send a custom message to Shiny client for adding the base widget
     sendWidgetContent(session, widgetbase)
+    cat("DEBUG: Sent widget", w$id, "to client\n")
   } # end for
+
+  ## Create widgets for selected projects (comparison widgets)
+  observe({
+    selected.pids.value <- selected.pids()
+    if (length(selected.pids.value) > 0) {
+      loginfo(paste("Creating comparison widgets for selected projects:", paste(selected.pids.value, collapse=", ")))
+      
+      for (selected.pid in selected.pids.value) {
+        # Skip if this is the current project (already handled above)
+        if (!is.null(pid()) && as.character(selected.pid) == as.character(pid())) {
+          next
+        }
+        
+        # Create widgets for this selected project
+        for (w in isolate(initial.widget.config())$widgets) {
+          widget.classname <- as.character(w$cls)
+          widget.class <- widget.list[[widget.classname]]
+          
+          # Create a unique ID for the comparison widget
+          comparison.id <- paste("comparison_widget", selected.pid, w$id, sep="_")
+          
+          # Position comparison widgets in a separate row to avoid overlap
+          comparison.col <- w$col
+          comparison.row <- w$row + 1
+          
+          # Create reactive PID for this selected project
+          this.pid <- reactive({as.numeric(selected.pid)})
+          
+          # Build widget using the widgetbase.output builder
+          loginfo(paste("Creating comparison widget:", comparison.id, "for project:", selected.pid))
+          widgetbase <- widgetbase.output(input, output, comparison.id, widget.class, topic, this.pid, w$size_x, w$size_y, comparison.col, comparison.row, selected.pids)
+          
+          # Send a custom message to Shiny client for adding the comparison widget
+          sendWidgetContent(session, widgetbase)
+        }
+      }
+    }
+  })
 
   ##
   ## Observe the gridster action menu save button (see also: nav/gidsterWidgetExt.js)
@@ -414,7 +503,7 @@ shinyServer(function(input, output, session) {
     ## Button input returns widget configuration as JSON
     cjson <- input$gridsterActionMenu
     #loginfo(paste("Got input from button:",cjson))
-    if (!is.null(cjson) && isValidJSON(cjson,TRUE)) {
+    if (isTRUE(!is.null(cjson)) && isValidJSON(cjson,TRUE)) {
       ## Create an R list object (unnamed) from JSON
       ## The first element is either "save" or "update". If it is "save", the
       ## configuration should be saved to file, otherwise only the displayed
@@ -426,7 +515,7 @@ shinyServer(function(input, output, session) {
       widget.config <- list(widgets=widgets.displayed)
 
       ## Save this configuration as a .config file
-      if (save.or.update == "save" && (!is.null(pid()) || (topic() == "testall"))) {
+      if (isTRUE(save.or.update == "save") && (isTRUE(!is.null(pid())) || isTRUE(topic() == "testall"))) {
         ## update configuration file
         ## TODO: save as cookie
         #widget.config$content <- widget.content
@@ -448,7 +537,7 @@ shinyServer(function(input, output, session) {
     widget.classname <- isolate({input$addwidget.class.name})
 
     ## check for null and empty string, because initially this could be delivered
-    if (!is.null(widget.classname) && length(widget.classname) > 0) {
+    if (!is.null(widget.classname) && isTRUE(length(widget.classname) > 0)) {
       ## Get a unique ID for the new widget
       id <- getuniqueid(prefix="widget")
 

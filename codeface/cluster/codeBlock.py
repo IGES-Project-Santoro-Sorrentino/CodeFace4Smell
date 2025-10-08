@@ -14,8 +14,7 @@
 # Copyright 2013, Siemens AG, Mitchell Joblin <mitchell.joblin.ext@siemens.com>
 # All Rights Reserved.
 
-import codeLine
-
+from . import codeLine
 class codeBlock:
     '''
     A code block is a contiguous set of lines of code from a single

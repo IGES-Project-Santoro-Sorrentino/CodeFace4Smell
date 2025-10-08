@@ -23,7 +23,7 @@ createWidgetClass(
   "General information",
   NULL, # no topical restrictions
   1, 1,
-  html=htmlOutput,
+  html=shiny::htmlOutput,
   detailpage=list(app="dashboard", topic="basics")
 )
 
@@ -87,7 +87,7 @@ createWidgetClass(
     )
     )
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commits <- function(w) {
@@ -144,7 +144,7 @@ createWidgetClass(
              "data-max"=200,
              style="width:260px; height:200px")
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commitspeed <- function(w) {
@@ -163,11 +163,32 @@ initWidget.widget.gauge.commitspeed <- function(w) {
   return(w)
 }
 
+#renderWidget.widget.gauge.commitspeed <- function(w) {
+#  reactive({
+#    print("Gauge value: ")
+#    str(w$scaled.rate())
+#    as.integer(w$scaled.rate())
+#  })
+#}
+
+
 renderWidget.widget.gauge.commitspeed <- function(w) {
   reactive({
-    print("Gauge value: ")
-    str(w$scaled.rate())
-    as.integer(w$scaled.rate())
+    val <- w$scaled.rate()
+    print("Gauge value: "); str(val)
+
+    #Se è vuoto, NA o non numerico -> 0
+    if (length(val) == 0) return(0L)
+    val <- suppressWarnings(as.numeric(val))
+    if (length(val) > 1) val <- val[1]    #caso in cui dovesse restituire un vettore
+
+    #Trasforma Inf/NaN/NA in 0
+    if (!is.finite(val) || is.na(val)) val <- 0
+
+    #clamp se il gauge è percentuale
+    val <- max(min(val, 100), 0)
+
+    as.integer(round(val))
   })
 }
 
@@ -203,7 +224,7 @@ createWidgetClass(
     )
     )
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 renderWidget.widget.gauge.current.cycle <- function(w) {
@@ -240,7 +261,7 @@ createWidgetClass(
              "data-max"=200,
              style="width:260px; height:200px")
   },
-  detailpage=list()
+  detailpage=list(app="dashboard", topic="construction")
 )
 
 initWidget.widget.gauge.commits.per.cycle <- function(w) {

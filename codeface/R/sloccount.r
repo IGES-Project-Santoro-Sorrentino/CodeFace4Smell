@@ -23,7 +23,8 @@ source("config.r")
 ## that belong to a project. cost.per.py specifies how much a developer
 ## costs, in a currency of your choice.
 gather.sloccount.results <- function(dir, cost.per.py) {
-  return(do.system("sloccount", str_c("--personcost ", cost.per.py, " ", dir)))
+  cmd <- str_c("sloccount --personcost ", cost.per.py, " ", dir)
+  return(system(cmd, intern=TRUE, ignore.stderr=TRUE))
 }
 
 ## Append a new entry to a sloccount time series in the database
@@ -147,8 +148,34 @@ parse.sloccount <- function(output) {
 }
 
 do.sloccount.analysis <- function(code.dir, cost.per.py=60000) {
-  output <- gather.sloccount.results(code.dir, cost.per.py)
-  res <- parse.sloccount(output)
-
-  return(res)
+  ## Check if sloccount tool is available using system() directly
+  sloccount.available <- tryCatch({
+    system("sloccount --version", intern=TRUE, ignore.stderr=TRUE)
+    TRUE
+  }, error = function(e) {
+    loginfo("sloccount tool not available, skipping sloccount analysis", logger="complexity")
+    FALSE
+  })
+  
+  ## If sloccount tool is not available, return empty data
+  if (!sloccount.available) {
+    return(list(metrics=data.frame()))
+  }
+  
+  ## Check if the code directory exists and has files
+  code.subdir <- file.path(code.dir, "code")
+  if (!dir.exists(code.subdir) || length(list.files(code.subdir, recursive=TRUE)) == 0) {
+    loginfo("No files found in code directory, skipping sloccount analysis", logger="complexity")
+    return(list(metrics=data.frame()))
+  }
+  
+  ## Try to run sloccount analysis
+  tryCatch({
+    output <- gather.sloccount.results(code.subdir, cost.per.py)
+    res <- parse.sloccount(output)
+    return(res)
+  }, error = function(e) {
+    loginfo("sloccount analysis failed, returning empty data", logger="complexity")
+    return(list(metrics=data.frame()))
+  })
 }

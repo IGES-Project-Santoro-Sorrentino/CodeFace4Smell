@@ -24,6 +24,7 @@ suppressPackageStartupMessages(library(reshape))
 source("config.r")
 source("db.r")
 source("query.r")
+source("utils.r")
 source("system.r")
 source("mc_helpers.r")
 source("sloccount.r")
@@ -68,16 +69,27 @@ sample.commits <- function(conf, range.id) {
 }
 
 
-perform.git.checkout <- function(repodir, commit.hash, code.dir, archive.file) {
-  args <- str_c(" --git-dir=", repodir, " archive -o ", archive.file,
-                " --format=tar --prefix='code/' ", commit.hash)
-  do.system("git", args)
-
-  args <- str_c("-C ", code.dir, " -xf ", archive.file)
-  do.system("tar", args)
-}
-
 do.understand.analysis <- function(code.dir, results.file) {
+  ## Check if understand tool is available using system() directly
+  understand.available <- tryCatch({
+    result <- system("und --version", intern=TRUE, ignore.stderr=TRUE)
+    if (length(result) > 0 && !is.na(result[1])) {
+      loginfo(str_c("Understand tool found: ", result[1]), logger="complexity")
+      TRUE
+    } else {
+      FALSE
+    }
+  }, error = function(e) {
+    loginfo("Understand tool not available, skipping understand analysis", logger="complexity")
+    FALSE
+  })
+  
+  ## If understand tool is not available, return early
+  if (!understand.available) {
+    return(NULL)
+  }
+  
+  ## If we get here, understand tool is available, proceed with analysis
   ## TODO: This should be overwriteable by the local configuration files
   metrics.list <- c("RatioCommentToCode", "Cyclomatic", "MaxCyclomatic",
                     "AvgEssential", "MaxNesting", "CountStmt", "Cyclomatic",
@@ -197,27 +209,32 @@ do.complexity.analysis <- function(conf) {
   sloccount.plot.id <- get.or.create.plot.id(conf, "sloccount")
   understand.plot.id <- get.or.create.plot.id(conf, "understand_raw")
 
-  res.list <- mclapply.db(conf, 1:nrow(commits.list), function(conf, i) {
-      logdevinfo(str_c("Analysing sample ", i, "\n"), logger="complexity")
-      commit.hash <- commits.list[[i, "commitHash"]]
-      commit.date <- commits.list[[i, "commitDate"]]
+  res.list <- lapply(1:nrow(commits.list), function(i) {
+    ## A database connection is required for every worker thread.
+    conf <- init.db.global(conf)
+    
+    logdevinfo(str_c("Analysing sample ", i, "\n"), logger="complexity")
+    commit.hash <- commits.list[[i, "commitHash"]]
+    commit.date <- commits.list[[i, "commitDate"]]
 
-      archive.file <- tempfile() # tarball from "git archive"
-      results.file <- tempfile() # understand database
+    archive.file <- tempfile() # tarball from "git archive"
+    results.file <- tempfile() # understand database
 
-      code.dir <- file.path(temp.dir, i)
-      dir.create(code.dir, showWarnings=FALSE)
+    code.dir <- file.path(temp.dir, i)
+    dir.create(code.dir, showWarnings=FALSE)
 
-      logdevinfo(str_c("Checking out revision ", commit.hash, " into ",
-                    code.dir, "\n"), logger="complexity")
-      perform.git.checkout(conf$repodir, commit.hash, code.dir, archive.file)
+    logdevinfo(str_c("Checking out revision ", commit.hash, " into ",
+                  code.dir, "\n"), logger="complexity")
+    perform.git.checkout(conf$repodir, commit.hash, code.dir, archive.file)
 
-      if (conf$understand == TRUE) {
-        logdevinfo(str_c("Performing understand analysis for ",
-	                  commit.hash, "\n"),
-                   logger="complexity")
-        do.understand.analysis(code.dir, results.file)
+    if (conf$understand == TRUE) {
+      logdevinfo(str_c("Performing understand analysis for ",
+                    commit.hash, "\n"),
+                 logger="complexity")
+      understand.result <- do.understand.analysis(code.dir, results.file)
 
+      ## Only process understand results if analysis was successful
+      if (!is.null(understand.result)) {
         ## The understand output still needs to be heavily post-processed.
         ## This is faster when we can select portions of the data from the
         ## SQL database, so we store a "rough" version of the data from
@@ -247,25 +264,33 @@ do.complexity.analysis <- function(conf) {
           loginfo(str_c("Warning: understand analysis failed for ", commit.hash,
                         " -- skipping this sample"), logger="complexity")
         }
+      } else {
+        loginfo(str_c("Understand analysis skipped for ", commit.hash,
+                      " -- tool not available"), logger="complexity")
       }
+    }
 
-      if (conf$sloccount == TRUE) {
-        logdevinfo(str_c("Performing sloccount analysis for ",
-                         commit.hash, "\n"),
-                   logger="complexity")
-        res <- do.sloccount.analysis(code.dir)
-        add.sloccount.ts(conf, sloccount.plot.id, commit.date, res)
-      }
+    if (conf$sloccount == TRUE) {
+      logdevinfo(str_c("Performing sloccount analysis for ",
+                       commit.hash, "\n"),
+                 logger="complexity")
+      res <- do.sloccount.analysis(code.dir)
+      add.sloccount.ts(conf, sloccount.plot.id, commit.date, res)
+    }
 
-      logdevinfo("Finished analysing sample ", i, "\n", logger="complexity")
+    logdevinfo("Finished analysing sample ", i, "\n", logger="complexity")
+    dbDisconnect(conf$con)
 
-      return(NULL)
+    return(NULL)
   })
 
   ## The temporary files that have been created are all located
   ## in the temporary directory and are therefore implicitely removed
   ## by the unlink call.
   unlink(temp.dir, recursive=TRUE)
+  
+  ## Return invisibly to avoid printing NULL to console
+  invisible(NULL)
 }
 
 ## ################# Dispatcher ######################
@@ -275,5 +300,5 @@ config.script.run({
 
   conf <- init.mc(conf)
   loginfo(str_c("Using ", conf$jobs, " jobs\n"), logger="complexity")
-  do.complexity.analysis(conf)
+  invisible(do.complexity.analysis(conf))
 })

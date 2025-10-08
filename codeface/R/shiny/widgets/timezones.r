@@ -19,7 +19,7 @@
 library(png)
 library(grid)
 
-source("../../timezones.r", chdir=TRUE)
+source("../../timezones.r")
 
 ## This image was obtained from
 ## http://commons.wikimedia.org/wiki/File:UTC_hue4map_X_world_Robinson.png
@@ -143,8 +143,9 @@ listViews.widget.timezones.test2 <- function(w) {
 createWidgetClass(
   "widget.timezones.commits",
   "Developer commit timezones", "Timezones where commits were made",
-  NULL,
-  2, 1
+  c("overview"),
+  2, 1,
+  detailpage=list(app="timezones", topic="overview")
 )
 
 ## Extract timezone information from commits

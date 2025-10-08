@@ -16,7 +16,8 @@
 ## Copyright 2013 by Siemens AG, Wolfgang Mauerer <wolfgang.mauerer@siemens.com>
 ## All Rights Reserved.
 
-source("../../ts_utils.r", chdir=TRUE)
+source("../../ts_utils.r")
+library(ggplot2)
 
 ## Generate commity activity punch card datasets for all cycles
 ## of a given project

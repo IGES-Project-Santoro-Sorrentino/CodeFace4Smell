@@ -25,6 +25,7 @@ import signal
 import sys
 import traceback
 from collections import OrderedDict, namedtuple
+from datetime import datetime
 from glob import glob
 from math import sqrt
 from multiprocessing import Process, Queue, JoinableQueue, Lock
@@ -34,15 +35,19 @@ from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile, mkdtemp
 from time import sleep
 from threading import enumerate as threading_enumerate
-from Queue import Empty
+from queue import Empty
 from datetime import timedelta, datetime
 
 # Represents a job submitted to the batch pool.
 BatchJobTuple = namedtuple('BatchJobTuple', ['id', 'func', 'args', 'kwargs',
         'deps', 'startmsg', 'endmsg'])
 class BatchJob(BatchJobTuple):
+    def __new__(cls, *args, **kwargs):
+        # Create the namedtuple instance using __new__
+        return super(BatchJob, cls).__new__(cls, *args)
+    
     def __init__(self, *args, **kwargs):
-        super(BatchJob, self).__init__(*args, **kwargs)
+        # Initialize additional attributes
         self.done = False
         self.submitted = False
 
@@ -149,10 +154,10 @@ class BatchJobPool(object):
             # Terminate and join the workers
             # Wait 100ms to allow backtraces to be logged
             sleep(0.1)
-            log.devinfo("Terminating workers...")
+            log.info("Terminating workers...")
             for w in self.workers:
                 w.terminate()
-            log.devinfo("Workers terminated.")
+            log.info("Workers terminated.")
 
 def batchjob_worker_function(work_queue, done_queue):
     '''
@@ -240,12 +245,36 @@ signal.signal(signal.SIGTERM, handle_sigterm)
 # Also dump on sigusr1, but do not terminate
 signal.signal(signal.SIGUSR1, handle_sigusr1)
 
-def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
+def generate_report_st(stdir):
+    log.info("  -> Generating report")
+    # We run latex in a temporary directory so that it's easy to
+    # get rid of the log files etc. created during the run that are
+    # not relevant for the final result
+    orig_wd = os.getcwd()
+    tmpdir = mkdtemp()
+    os.chdir(tmpdir)
+    
+    # Compile reports with lualatex
+    cmd = []
+    cmd.append("lualatex")
+    cmd.append("-interaction=nonstopmode")
+    cmd.append(os.path.join(stdir, "report.tex"))
+    execute_command(cmd, ignore_errors=True)
+    try:
+        shutil.copy("report.pdf", stdir)
+    except IOError:
+        log.warning("Could not copy report PDF (missing input data?)")
+
+    os.chdir(orig_wd)
+    shutil.rmtree(tmpdir)
+
+def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None, silent_errors=False):
     '''
     Execute the command `cmd` specified as a list of ['program', 'arg', ...]
-    If ignore_errors is true, a non-zero exit code will be ignored, otherwise
-    an exception is raised.
-    If direct_io is True, do not capture the stdin and stdout of the command
+    If ignore_errors is true, a non-zero exit code will be ignored (and a warning
+    messages will be issued), otherwise an exception is raised. If silent_errors is True,
+    no messages will be emitted even in case of an error (but exceptions will still be raised).
+    If direct_io is True, do not capture the stdin and stdout of the command.
     Returns the stdout of the command.
     '''
     jcmd = " ".join(cmd)
@@ -262,22 +291,39 @@ def execute_command(cmd, ignore_errors=False, direct_io=False, cwd=None):
 
     if pipe.returncode != 0:
         if ignore_errors:
-            log.warning("Command '{}' failed with exit code {}. Ignored.".
-                    format(jcmd, pipe.returncode))
+            if not(silent_errors):
+                log.warning("Command '{}' failed with exit code {}. Ignored.".
+                            format(jcmd, pipe.returncode))
         else:
-            if not direct_io:
+            if not(direct_io) and not(silent_errors):
                 log.info("Command '{}' stdout:".format(jcmd))
-                for line in stdout.splitlines():
-                    log.info(line)
+                if stdout is not None:
+                    for line in stdout.splitlines():
+                        log.info(line)
                 log.info("Command '{}' stderr:".format(jcmd))
-                for line in stderr.splitlines():
-                    log.info(line)
+                if stderr is not None:
+                    for line in stderr.splitlines():
+                        log.info(line)
             msg = "Command '{}' failed with exit code {}. \n" \
                   "(stdout: {}\nstderr: {})"\
                   .format(jcmd, pipe.returncode, stdout, stderr)
-            log.error(msg)
+            if not(silent_errors):
+                log.error(msg)
             raise Exception(msg)
-    return stdout
+    
+    if direct_io:
+        return ""
+    if stdout is not None:
+        try:
+            return stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            # Handle non-UTF-8 characters in git output
+            try:
+                return stdout.decode("utf-8", errors="replace")
+            except:
+                # Fallback: decode as latin-1 and replace problematic characters
+                return stdout.decode("latin-1", errors="replace")
+    return ""
 
 def _convert_dot_file(dotfile):
     '''
@@ -325,71 +371,190 @@ def layout_graph(filename):
     cmd.append("-Gcharset=utf-8")
     cmd.append("-o{0}.pdf".format(os.path.splitext(filename)[0]))
     cmd.append(out.name)
-    execute_command(cmd)
+    execute_command(cmd, ignore_errors=True)
     # Manually remove the temporary file
     os.unlink(out.name)
 
 def generate_report(start_rev, end_rev, resdir):
     log.devinfo("  -> Generating report")
     report_base = "report-{0}_{1}".format(start_rev, end_rev)
-
+    
+    # Check if we have any data files to include in the report
+    data_files = glob(os.path.join(resdir, "*.tex")) + glob(os.path.join(resdir, "*.pdf"))
+    if not data_files:
+        log.warning("No data files found for report generation, skipping LaTeX report")
+        return
+    
     # Run perl script to generate report LaTeX file
     cmd = []
     cmd.append(resource_filename(__name__, "perl/create_report.pl"))
     cmd.append(resdir)
     cmd.append("{0}--{1}".format(start_rev, end_rev))
-    with open(os.path.join(resdir, report_base + ".tex"), 'w') as f:
-        f.write(execute_command(cmd))
-
-    # Compile report with lualatex
-    cmd = []
-    cmd.append("lualatex")
-    cmd.append("-interaction=nonstopmode")
-    cmd.append(os.path.join(resdir, report_base + ".tex"))
-
-    # We run latex in a temporary directory so that it's easy to
-    # get rid of the log files etc. created during the run that are
-    # not relevant for the final result
-    orig_wd = os.getcwd()
-    tmpdir = mkdtemp()
-
-    os.chdir(tmpdir)
-    execute_command(cmd, ignore_errors=True)
-    try:
-        shutil.copy(report_base + ".pdf", resdir)
-    except IOError:
-        log.warning("Could not copy report PDF (missing input data?)")
-
-    os.chdir(orig_wd)
-    shutil.rmtree(tmpdir)
     
-def generate_report_st(stdir):
-    log.info("  -> Generating report")
-    # We run latex in a temporary directory so that it's easy to
-    # get rid of the log files etc. created during the run that are
-    # not relevant for the final result
+    try:
+        tex_content = execute_command(cmd)
+        tex_file_path = os.path.join(resdir, report_base + ".tex")
+        with open(tex_file_path, 'w', encoding='utf-8') as f:
+            f.write(tex_content)
+        log.info("Generated LaTeX file: {0}".format(tex_file_path))
+    except Exception as e:
+        log.error("Failed to generate LaTeX file: {0}".format(str(e)))
+        return
+    
+    # Determine LaTeX engine
+    latex_engine = None
+    try:
+        execute_command(["pdflatex", "--version"], ignore_errors=True, silent_errors=True)
+        latex_engine = "pdflatex"
+    except:
+        try:
+            execute_command(["lualatex", "--version"], ignore_errors=True, silent_errors=True)
+            latex_engine = "lualatex"
+        except:
+            log.warning("No LaTeX engine available (pdflatex or lualatex), skipping PDF generation")
+            return
+    
+    log.info("Using LaTeX engine: {0}".format(latex_engine))
+    
+    # We run latex in a temporary directory
     orig_wd = os.getcwd()
     tmpdir = mkdtemp()
     os.chdir(tmpdir)
     
-    # Compile reports with lualatex
-    cmd = []
-    cmd.append("lualatex")
-    cmd.append("-interaction=nonstopmode")
-    cmd.append(os.path.join(stdir, "report.tex"))
-    execute_command(cmd, ignore_errors=True)
     try:
-        shutil.copy("report.pdf", stdir)
-    except IOError:
-        log.warning("Could not copy report PDF (missing input data?)")
+        # Copy the .tex file to temp directory
+        shutil.copy(os.path.join(resdir, report_base + ".tex"), ".")
+        
+        # Copy all potentially referenced files
+        for pattern in ["*.tex", "*.pdf", "*.png", "*.jpg", "*.jpeg", "*.gif"]:
+            for file_path in glob(os.path.join(resdir, pattern)):
+                try:
+                    shutil.copy(file_path, ".")
+                    log.debug("Copied file: {0}".format(os.path.basename(file_path)))
+                except Exception as copy_error:
+                    log.warning("Could not copy file {0}: {1}".format(file_path, str(copy_error)))
+        
+        # Clean up any existing auxiliary files
+        for ext in [".aux", ".log", ".fls", ".fdb_latexmk", ".synctex.gz"]:
+            aux_file = report_base + ext
+            if os.path.exists(aux_file):
+                os.remove(aux_file)
+        
+        # Build LaTeX command - REMOVED -halt-on-error to see actual errors
+        cmd = [latex_engine, "-interaction=nonstopmode", report_base + ".tex"]
+        
+        log.info("Running LaTeX command: {0}".format(" ".join(cmd)))
+        
+        # First attempt
+        try:
+            result = execute_command(cmd, ignore_errors=True)
+            log.debug("LaTeX first run completed")
+            
+            # Check if PDF was generated
+            if os.path.exists(report_base + ".pdf"):
+                shutil.copy(report_base + ".pdf", resdir)
+                log.info("Report PDF generated successfully: {0}".format(report_base + ".pdf"))
+                return
+            else:
+                log.warning("PDF not generated on first attempt")
+        
+        except Exception as latex_error:
+            log.warning("LaTeX execution failed: {0}".format(str(latex_error)))
+        
+        # Analyze the LaTeX log file for specific errors
+        log_file = report_base + ".log"
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                log_content = f.read()
+                
+            # Extract meaningful error messages
+            error_patterns = [
+                r"^! (.+)$",  # LaTeX errors starting with !
+                r"^l\.\d+ (.+)$",  # Line-specific errors
+                r"Fatal error",
+                r"Emergency stop",
+                r"File.*not found",
+                r"Undefined control sequence"
+            ]
+            
+            errors_found = []
+            for line in log_content.splitlines():
+                for pattern in error_patterns:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        errors_found.append(line.strip())
+                        if len(errors_found) >= 5:  # Limit to first 5 errors
+                            break
+                if len(errors_found) >= 5:
+                    break
+            
+            if errors_found:
+                log.warning("LaTeX compilation errors found:")
+                for error in errors_found:
+                    log.warning("  -> {0}".format(error))
+            else:
+                log.warning("No specific errors found in log, showing last part of log:")
+                log_lines = log_content.splitlines()
+                for line in log_lines[-10:]:  # Last 10 lines
+                    if line.strip():
+                        log.warning("  -> {0}".format(line.strip()))
+        
+        else:
+            log.warning("No log file generated by LaTeX")
+        
+        # Try a second run (sometimes fixes reference issues)
+        log.info("Attempting second LaTeX run...")
+        try:
+            result = execute_command(cmd, ignore_errors=True)
+            if os.path.exists(report_base + ".pdf"):
+                shutil.copy(report_base + ".pdf", resdir)
+                log.info("Report PDF generated successfully on second run: {0}".format(report_base + ".pdf"))
+                return
+        except Exception as second_error:
+            log.warning("Second LaTeX run also failed: {0}".format(str(second_error)))
+        
+        # Final attempt with minimal document
+        log.info("Attempting to create minimal test document...")
+        minimal_tex = """\\documentclass{article}
+                \\usepackage[utf8]{inputenc}
+                \\begin{document}
+                \\title{Test Report for {0}--{1}}
+                \\author{Codeface Analysis}
+                \\date{\\today}
+                \\maketitle
 
-    os.chdir(orig_wd)
-    shutil.rmtree(tmpdir)
+                \\section{Report Generation Failed}
+                The full report could not be generated due to LaTeX compilation errors.
+                This is a minimal fallback document.
+
+                \\section{Attempted Analysis Period}
+                From: {0}\\\\
+                To: {1}\\\\
+                Directory: {2}
+        \\end{document}""".format(start_rev, end_rev, resdir)
+        
+        with open("minimal_" + report_base + ".tex", 'w') as f:
+            f.write(minimal_tex)
+        
+        minimal_cmd = [latex_engine, "-interaction=nonstopmode", "minimal_" + report_base + ".tex"]
+        try:
+            execute_command(minimal_cmd, ignore_errors=True)
+            if os.path.exists("minimal_" + report_base + ".pdf"):
+                shutil.copy("minimal_" + report_base + ".pdf", os.path.join(resdir, "minimal_" + report_base + ".pdf"))
+                log.info("Minimal fallback report generated: minimal_{0}.pdf".format(report_base))
+        except:
+            log.warning("Even minimal document failed to compile")
+        
+    except Exception as e:
+        log.warning("Could not generate report PDF: {0}".format(str(e)))
+    
+    finally:
+        os.chdir(orig_wd)
+        shutil.rmtree(tmpdir)
+
 
 def generate_reports(start_rev, end_rev, range_resdir):
     files = glob(os.path.join(range_resdir, "*.dot"))
-    log.info("  -> Analysing revision range {0}..{1}: Generating Reports...".
-        format(start_rev, end_rev))
+    log.info("  -> Generating Reports...")
     for file in files:
         layout_graph(file)
     generate_report(start_rev, end_rev, range_resdir)
@@ -418,7 +583,7 @@ def check4cppstats():
     """
     # We can not check the version directly as there is no version switch
     # on cppstats We just check if the first line is OK.
-    line = "cppstats v0.8.4"
+    line = "cppstats v0.9."
     cmd = "/usr/bin/env cppstats --version".split()
     res = execute_command(cmd)
     if not (res.startswith(line)):
@@ -429,6 +594,24 @@ def check4cppstats():
                   .format(error_message))
         raise Exception("no working cppstats found ({0})"
                         .format(error_message))
+
+
+def gen_prefix(i, num_ranges, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # When revisions are given by commit hashes, shorten them since
+        # they don't carry any meaning
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return("  -> Revision range {0}/{1} ({2}..{3}): ".format(i, num_ranges,
+                                                             start_rev, end_rev))
+
+def gen_range_path(base_path, i, start_rev, end_rev):
+    if (len(start_rev) == 40):
+        # Same logic as above, but construct a file system path
+        start_rev = start_rev[0:6]
+        end_rev = end_rev[0:6]
+    return(os.path.join(base_path, "{0}--{1}-{2}".
+                        format(str(i).zfill(3), start_rev, end_rev)))
 
 
 def parse_iso_git_date(date_string):
@@ -450,8 +633,20 @@ def parse_iso_git_date(date_string):
     parsed_date -= delta
     return parsed_date
 
+# Determine settings for the size and amount of analysis windows. If nothing
+# specific is provided, use default settings
+def get_analysis_windows(conf):
+    window_size_months = 3
+    num_window = -1
 
-def generate_analysis_windows(repo, window_size_months, num_windows=None):
+    if "windowSize" in conf.keys():
+        window_size_months = conf["windowSize"]
+    if "numWindows" in conf.keys():
+        num_window = conf["numWindows"]
+
+    return window_size_months, num_window
+
+def generate_analysis_windows(repo, window_size_months):
     """
     Generates a list of revisions (commit hash) in increments of the window_size
     parameter. The window_size parameter specifies the number of months between
@@ -473,7 +668,7 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs = []
     start = window_size_months  # Window size time ago
     end = 0  # Present time
-    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct'\
+    cmd_base = 'git --git-dir={0} log --no-merges --format=%H,%ct,%ci'\
         .format(repo).split()
     cmd_base_max1 = cmd_base + ['--max-count=1']
     cmd = cmd_base_max1 + [get_before_arg(end)]
@@ -481,11 +676,6 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     revs.extend(rev_end)
 
     while start != end:
-        if (not (num_windows is None)):
-            if num_windows==0:
-                break
-            num_windows = num_windows - 1
-        
         cmd = cmd_base_max1 + [get_before_arg(start)]
         rev_start = execute_command(cmd).splitlines()
 
@@ -511,9 +701,55 @@ def generate_analysis_windows(repo, window_size_months, num_windows=None):
     if int(revs[0][1]) > int(revs[1][1]):
       del revs[0]
 
-    # Extract hash
-    revs = [rev[0] for rev in revs]
+    # Extract hash values and dates intro seperate lists
+    revs_hash = [rev[0] for rev in revs]
+    revs_date = [rev[2].split(" ")[0] for rev in revs]
 
+    # We cannot detect release canndidate tags in this analysis mode,
+    # so provide a list with None entries
     rcs = [None for x in range(len(revs))]
 
-    return revs, rcs
+    return revs_hash, rcs, revs_date
+
+# --- Fallback per directory di range con prefisso NNN-- ---
+#def resolve_range_dir(tag_root: str, from_to: str) -> str:
+#    """
+#    Restituisce la directory del range anche se è salvata come NNN--<from_to>.
+#    Esempio: from_to = 'php-5.3.0-php-5.3.1'
+#    """
+#    short = os.path.join(tag_root, from_to)
+#    if os.path.isdir(short):
+#        return short
+#    # cerca *--<from_to>, prendendo l'ultimo in ordine alfabetico se ce ne sono più
+#    candidates = sorted(glob(os.path.join(tag_root, f"*--{from_to}")))
+#    return candidates[-1] if candidates else short
+
+#Alias creation
+def ensure_unprefixed_alias(range_resdir: str):
+    """
+    Se la dir ha prefisso NNN--, crea (se mancante) un alias senza prefisso
+    nella stessa cartella (symlink). Esempio:
+      001--php-5.3.0-php-5.3.1  ->  php-5.3.0-php-5.3.1
+    """
+    base = os.path.basename(range_resdir)
+    alias = re.sub(r"^\d{3}--", "", base)
+    if alias == base:
+        return  # nessun prefisso, nulla da fare
+    alias_path = os.path.join(os.path.dirname(range_resdir), alias)
+    if not os.path.exists(alias_path):
+        try:
+            os.symlink(base, alias_path)
+        except OSError:
+            # in ambienti dove i symlink sono vietati puoi no-op (o copiare, sconsigliato)
+            pass
+
+def ensure_all_unprefixed_aliases(tag_root: str):
+    """
+    Per ogni directory NNN--* in tag_root crea (se manca) l'alias senza prefisso.
+    """
+    if not os.path.isdir(tag_root):
+        return
+    for name in os.listdir(tag_root):
+        path = os.path.join(tag_root, name)
+        if os.path.isdir(path) and re.match(r"^\d{3}--", name):
+            ensure_unprefixed_alias(path)

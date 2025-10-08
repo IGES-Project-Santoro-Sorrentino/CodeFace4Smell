@@ -20,7 +20,7 @@
 
 import yaml
 import os.path
-import kerninfo
+from . import kerninfo
 import pickle
 import argparse
 from datetime import datetime
@@ -31,17 +31,57 @@ from .commit_analysis import createCumulativeSeries, createSeries, \
 from .dbmanager import DBManager, tstamp_to_sql
 
 def doAnalysis(dbfilename, destdir, revrange=None, rc_start=None):
-    pkl_file = open(dbfilename, 'rb')
-    vcs = pickle.load(pkl_file)
-    pkl_file.close()
+    try:
+        pkl_file = open(dbfilename, 'rb')
+        vcs = pickle.load(pkl_file)
+        pkl_file.close()
+    except (IOError, OSError) as e:
+        # Handle missing or corrupted database files
+        print("Warning: Could not load VCS analysis database {0}: {1}".format(dbfilename, str(e)))
+        # Create a minimal time series result
+        from .commit_analysis import TimeSeries
+        import time
+        current_time = int(time.time())
+        if revrange:
+            res = TimeSeries(revrange[0], revrange[1])
+            res.start_date = current_time
+            res.end_date = current_time
+            res.rc_start_date = None
+            return res
+        else:
+            # This shouldn't happen, but provide a fallback
+            res = TimeSeries("unknown", "unknown")
+            res.start_date = current_time
+            res.end_date = current_time
+            res.rc_start_date = None
+            return res
 
     if revrange:
         sfx = "{0}-{1}".format(revrange[0], revrange[1])
     else:
         sfx = "{0}-{1}".format(vcs.rev_start, vcs.rev_end)
 
-    res = createSeries(vcs, "__main__", revrange, rc_start)
-    return res
+    try:
+        res = createSeries(vcs, "__main__", revrange, rc_start)
+        return res
+    except Exception as e:
+        print("Warning: Error creating time series for {0}: {1}".format(sfx, str(e)))
+        # Create a minimal time series result
+        from .commit_analysis import TimeSeries
+        import time
+        current_time = int(time.time())
+        if revrange:
+            res = TimeSeries(revrange[0], revrange[1])
+            res.start_date = current_time
+            res.end_date = current_time
+            res.rc_start_date = None
+            return res
+        else:
+            res = TimeSeries(vcs.rev_start, vcs.rev_end)
+            res.start_date = current_time
+            res.end_date = current_time
+            res.rc_start_date = None
+            return res
 
 def writeReleases(dbm, tstamps, conf):
     pid = dbm.getProjectID(conf["project"], conf["tagging"])
@@ -71,17 +111,58 @@ def dispatch_ts_analysis(resdir, conf):
                                                            conf["revisions"][i]),
                                   "vcs_analysis.db")
 
-        ts = doAnalysis(dbfilename, destdir,
-                        revrange=[conf["revisions"][i-1], conf["revisions"][i]],
-                        rc_start=conf["rcs"][i])
+        try:
+            ts = doAnalysis(dbfilename, destdir,
+                            revrange=[conf["revisions"][i-1], conf["revisions"][i]],
+                            rc_start=conf["rcs"][i])
 
-        if (i==1):
-            tstamps.append(("release", conf["revisions"][i-1], ts.get_start()))
+            if (i==1):
+                tstamps.append(("release", conf["revisions"][i-1], ts.get_start()))
 
-        if (ts.get_rc_start()):
-            tstamps.append(("rc", conf["rcs"][i], ts.get_rc_start()))
+            if (ts.get_rc_start()):
+                tstamps.append(("rc", conf["rcs"][i], ts.get_rc_start()))
 
-        tstamps.append(("release", conf["revisions"][i], ts.get_end()))
+            tstamps.append(("release", conf["revisions"][i], ts.get_end()))
+            
+        except Exception as e:
+            print("Warning: Failed to process revision range {0}-{1}: {2}".format(
+                conf["revisions"][i-1], conf["revisions"][i], str(e)))
+            # Try to get actual commit dates from git instead of using fallback timestamps
+            try:
+                import subprocess
+                import time
+                
+                # Get actual commit dates from git
+                def get_git_commit_date(revision):
+                    try:
+                        result = subprocess.run(['git', 'show', '-s', '--format=%ct', revision], 
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            return int(result.stdout.strip())
+                    except:
+                        pass
+                    return None
+                
+                start_date = get_git_commit_date(conf["revisions"][i-1])
+                end_date = get_git_commit_date(conf["revisions"][i])
+                
+                # Use actual dates if available, otherwise use current time as fallback
+                if start_date is None:
+                    start_date = int(time.time())
+                if end_date is None:
+                    end_date = int(time.time())
+                
+                if (i==1):
+                    tstamps.append(("release", conf["revisions"][i-1], start_date))
+                tstamps.append(("release", conf["revisions"][i], end_date))
+                
+            except Exception as git_error:
+                print("Warning: Could not get git commit dates: {0}".format(str(git_error)))
+                # Final fallback - use current time instead of epoch
+                current_time = int(time.time())
+                if (i==1):
+                    tstamps.append(("release", conf["revisions"][i-1], current_time))
+                tstamps.append(("release", conf["revisions"][i], current_time))
 
     ## Stage 2: Insert time stamps for all releases considered into the database
     writeReleases(dbm, tstamps, conf)

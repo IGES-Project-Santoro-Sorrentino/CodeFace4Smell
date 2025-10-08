@@ -29,7 +29,7 @@ from glob import glob
 from codeface.logger import set_log_level, start_logfile, log
 from codeface.configuration import Configuration
 from codeface.util import execute_command
-from codeface.project import project_analyse, mailinglist_analyse, sociotechnical_analyse
+from codeface.project import project_analyse, mailinglist_analyse, sociotechnical_analyse, conway_analyse
 
 def get_parser():
     parser = argparse.ArgumentParser(prog='codeface',
@@ -89,19 +89,30 @@ def get_parser():
     ml_parser.add_argument('-m', '--mailinglist', help="Only run on the "
                 "specified mailing list (can be specified multiple times)",
                 default=[], action="append")
+    ml_parser.add_argument('--use-corpus', action="store_true",
+                        help="Re-use the corpus file that have been generated before")
     ml_parser.add_argument('resdir',
                         help="Directory to store analysis results in")
     ml_parser.add_argument('mldir',
                         help="Directory for mailing lists")
-    
+
     st_parser = sub_parser.add_parser('st', help='Run socio-technical analysis')
     st_parser.set_defaults(func=cmd_st)
     st_parser.add_argument('-c', '--config', help="Codeface configuration file",
-                default='codeface.conf')
+                           default='codeface.conf')
     st_parser.add_argument('-p', '--project', help="Project configuration file",
-                required=True)
+                           required=True)
     st_parser.add_argument('resdir',
-                        help="Directory with communication and collaboration analysis results")
+                           help="Directory with communication and collaboration analysis results")
+    conway_parser = sub_parser.add_parser('conway', help='Run conway (socio-technical) analysis')
+    conway_parser.set_defaults(func=cmd_conway)
+    conway_parser.add_argument('-c', '--config', help="Codeface configuration file",
+                default='codeface.conf')
+    conway_parser.add_argument('-p', '--project', help="Project configuration file",
+                required=True)
+    conway_parser.add_argument('resdir', help="Directory to store analysis results in")
+    conway_parser.add_argument('gitdir', help="Directory for git repositories")
+    conway_parser.add_argument('titandir', help="Directory that contains Titan jar files")
 
     dyn_parser = sub_parser.add_parser('dynamic', help='Start R server for a dynamic graph')
     dyn_parser.set_defaults(func=cmd_dynamic)
@@ -135,7 +146,8 @@ def cmd_ml(args):
     if logfile:
         logfile = os.path.abspath(logfile)
     mailinglist_analyse(resdir, mldir, codeface_conf, project_conf,
-                        args.loglevel, logfile, args.jobs, args.mailinglist)
+                        args.loglevel, logfile, args.jobs, args.mailinglist,
+                        args.use_corpus)
     return 0
 
 def cmd_st(args):
@@ -148,6 +160,17 @@ def cmd_st(args):
         logfile = os.path.abspath(logfile)
     sociotechnical_analyse(resdir, codeface_conf, project_conf,
                            args.loglevel, logfile, args.jobs)
+    return 0
+def cmd_conway(args):
+    '''Dispatch the ``conway`` command.'''
+    # First make all the args absolute
+    resdir, gitdir, titandir = map(os.path.abspath, (args.resdir, args.gitdir, args.titandir))
+    codeface_conf, project_conf = map(os.path.abspath, (args.config, args.project))
+    logfile = args.logfile
+    if logfile:
+        logfile = os.path.abspath(logfile)
+    conway_analyse(resdir, gitdir, titandir, codeface_conf, project_conf,
+                   args.loglevel, logfile, args.jobs)
     return 0
 
 def cmd_dynamic(args):
@@ -179,6 +202,7 @@ def cmd_test(args):
     config_file=os.path.abspath(args.config)
     del args
     test_path = os.path.join(os.path.dirname(__file__), 'test')
+
     print('\n===== running unittests =====\n')
     tests = unittest.TestLoader().discover(os.path.join(test_path, 'unit'),
         pattern='test_{}.py'.format(pattern), top_level_dir=test_path)
@@ -190,6 +214,7 @@ def cmd_test(args):
         else:
             print('\n===== unit tests failed :( =====')
         return 0 if unit_success else 1
+
     print('\n===== running integration tests =====\n')
     tests = unittest.TestLoader().discover(os.path.join(test_path, 'integration'),
         pattern='test_{}.py'.format(pattern), top_level_dir=test_path)
@@ -201,12 +226,25 @@ def cmd_test(args):
                 set_config(test)
         suite.config_file = config_file
     set_config(tests)
-    int_result = unittest.TextTestRunner(verbosity=2).run(tests)
+    int_result = unittest.TextTestRunner(verbosity=1).run(tests)
     int_success = not (int_result.failures or int_result.errors)
+
     if unit_success and int_success:
-            print('\n===== all tests succeeded :) =====')
+            print('\n===== All integration and unit tests succeeded :) =====')
     else:
-            print('\n===== some tests failed :( =====')
+            print('\n===== Some unit or integration tests failed :( =====')
+            for fail in unit_result.failures:
+                print("Failed unit test: {0}".format(fail[0]))
+                print("          Result: {0}\n\n".format(fail[1]))
+            for fail in unit_result.errors:
+                print("Error in unit test: {0}".format(fail[0]))
+                print("            Result: {0}\n\n".format(fail[1]))
+            for fail in int_result.failures:
+                print("Failed integration test: {0}".format(fail[0]))
+                print("                 Result: {0}\n\n".format(fail[1]))
+            for fail in int_result.errors:
+                print("Error in integration test: {0}".format(fail[0]))
+                print("                   Result: {0}\n\n".format(fail[1]))
     return 0 if unit_success and int_success else 1
 
 def run(argv):

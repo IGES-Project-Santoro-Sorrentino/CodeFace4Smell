@@ -1,4 +1,7 @@
 ## This file is part of Codeface. Codeface is free software: you can
+
+# Load required libraries
+suppressPackageStartupMessages(library(lubridate))
 ## redistribute it and/or modify it under the terms of the GNU General Public
 ## License as published by the Free Software Foundation, version 2.
 ##
@@ -21,7 +24,22 @@ prepare.release.boundaries <- function(conf) {
 
   date.columns <- c("date.start", "date.end", "date.rc.start")
   for (col in date.columns) {
-    res[, col] <- as.POSIXct(res[, col], origin="1970-01-01")
+    # Check if the column is already POSIXct
+    if (!inherits(res[, col], "POSIXct")) {
+      # Try parsing as datetime string first
+      if (is.character(res[, col])) {
+        parsed <- ymd_hms(res[, col], quiet=TRUE)
+        if (!any(is.na(parsed))) {
+          res[, col] <- parsed
+        } else {
+          # Fall back to Unix timestamp conversion
+          res[, col] <- as.POSIXct(res[, col], origin="1970-01-01")
+        }
+      } else {
+        # Fall back to Unix timestamp conversion
+        res[, col] <- as.POSIXct(res[, col], origin="1970-01-01")
+      }
+    }
   }
 
   return(res)
