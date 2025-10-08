@@ -31,7 +31,19 @@ source("../../vis.ports.r", chdir=TRUE)
 
 ## Global variables
 conf <- config.from.args(require.project=FALSE)
-projects.list <- query.projects(conf$con)
+
+## Function to get projects list (can be called to refresh)
+get.projects.list <- function() {
+  tryCatch({
+    query.projects(conf$con)
+  }, error = function(e) {
+    logwarn(paste("Error loading projects:", e$message))
+    return(list(id=c(), name=c()))
+  })
+}
+
+## Initial projects list (will be refreshed as needed)
+projects.list <- get.projects.list()
 
 ## breadcrumb
 source("../nav/breadcrumb.shiny.r", chdir = TRUE)

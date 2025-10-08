@@ -36,15 +36,19 @@ shinyUI(bootstrapPage(
       tags$script(src = 'js/raphael.2.1.0.min.js'),
       tags$script(src = 'js/justgage.1.0.1.min.js'),
       tags$script(src = "justgage_binding.js"),
-      tags$script(src = "shiny_status_binding.js")
+      tags$script(src = "shiny_status_binding.js"),
+      tags$script(src = "refresh_handler.js")
   	),
     
   	div(class = "container",
       div(class = "row", style="margin-top: 10px; height: 36px;",
-          div(class = "span7", style = "height: 100%;",
+          div(class = "span6", style = "height: 100%;",
   	          breadcrumbOutput("quantarchBreadcrumb")),
           div( class="span1", style = "padding: 3px 0px; text-align: center;",
               gridsterButton("gridsterActionMenu","addWidgetDialog")),
+          div( class="span1", style = "padding: 3px 0px; text-align: center;",
+              actionButton("refreshProjects", "↻", title="Refresh projects list",
+                          style="height: 30px; padding: 5px 12px;")),
           div( class="span4",
               compareWithProjectsOutput("selectpidsui"))
           ),

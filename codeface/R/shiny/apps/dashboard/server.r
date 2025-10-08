@@ -270,6 +270,25 @@ shinyServer(function(input, output, session) {
     #if (dbDisconnect(conf$con)) cat("Database connection closed.")
   })
 
+  ## Handle refresh button click
+  ## When clicked, reload projects from database and refresh the page
+  observeEvent(input$refreshProjects, {
+    loginfo("Refresh button clicked - reloading projects list")
+    
+    # Refresh projects list from database
+    new.projects <- get.projects.list()
+    old.count <- length(projects.list$id)
+    new.count <- length(new.projects$id)
+    
+    # Update global projects list
+    projects.list <<- new.projects
+    
+    loginfo(paste("Projects refreshed: old count =", old.count, ", new count =", new.count))
+    
+    # Reload the page to show updated projects
+    session$sendCustomMessage(type = "reloadPage", message = list())
+  })
+
   ## Url parameter String and Parameter List (reactive statements)
   ##    (Parameter string gets checked, see: nav/breadcrumb.shiny.r)
   paramstr <- reactive({urlparameter.checked(session$clientData$url_search)})
