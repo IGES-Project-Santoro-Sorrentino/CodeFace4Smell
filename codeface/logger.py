@@ -126,7 +126,15 @@ def _get_log_handler(stream=None):
     FORMAT = "%(asctime)s [$BOLD%(name)s$RESET] %(processName)s %(levelname)s: %(message)s"
     datefmt = '%Y-%m-%d %H:%M:%S'
 
-    if hasattr(handler.stream, "fileno") and os.isatty(handler.stream.fileno()):
+    # Check if stream is a TTY - handle cases where fileno() is not available (e.g. StringIO)
+    is_tty = False
+    try:
+        if hasattr(handler.stream, "fileno"):
+            is_tty = os.isatty(handler.stream.fileno())
+    except (AttributeError, io.UnsupportedOperation):
+        pass
+    
+    if is_tty:
         handler.setFormatter(_ColoredFormatter(_insert_seqs(FORMAT), datefmt=datefmt))
     else:
         handler.setFormatter(logging.Formatter(_remove_seqs(FORMAT), datefmt=datefmt))

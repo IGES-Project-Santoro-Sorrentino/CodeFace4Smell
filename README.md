@@ -1,5 +1,24 @@
 # CodeFace4Smell - Guida all'Installazione e Utilizzo
 
+<div align="center">
+  <img src="https://web.unisa.it/uploads/images/00_UNISA_CoA.png" alt="Logo Università degli Studi di Salerno" width="200"/>
+  
+  ### Progetto Universitario
+  
+  **Sviluppato da:**
+  - **Gabriele Santoro**
+  - **Pasquale Sorrentino**
+  
+  📚 **Università degli Studi di Salerno**
+  
+  🎓 **Corso di Laurea Magistrale in Informatica (L-18)**
+  
+  📖 **Esame:** Ingegneria, Gestione ed Evoluzione del Software
+  
+</div>
+
+---
+
 ## Indice
 
 - [Requisiti](#requisiti)
@@ -7,6 +26,7 @@
 - [Configurazione e Avvio](#configurazione-e-avvio)
 - [Analisi di un Progetto](#analisi-di-un-progetto)
 - [Analisi Aggiuntive](#analisi-aggiuntive)
+- [Testing](#testing)
 - [Visualizzazione dei Risultati](#visualizzazione-dei-risultati)
 - [Gestione del Container Docker](#gestione-del-container-docker)
 
@@ -90,15 +110,15 @@ Una volta all'interno del container, è necessario avviare i servizi necessari.
 Avvia il server con:
 
 ```bash
-./start_server.sh
+./start-server.sh
 ```
 
-### Passo 6: Avvio dell'Interfaccia Web
+### Passo 6: Avvio della Dashboard
 
-Avvia l'interfaccia web con:
+Avvia la dashboard web con:
 
 ```bash
-./deploy-shiny-nginx.sh
+./start-dashboard.sh
 ```
 
 ## Analisi di un Progetto
@@ -146,13 +166,15 @@ Una volta completata l'analisi principale, puoi eseguire due tipi di analisi agg
 
 ### Analisi della Mailing List
 
-L'analisi della mailing list richiede il download delle mailing list del progetto.
+L'analisi della mailing list richiede l'importazione manuale delle mailing list del progetto.
 
-**Passo 1:** Scarica le mailing list e inseriscile nella cartella `mldir/`:
+**Passo 1:** Scarica le mailing list del progetto e inseriscile manualmente nella cartella `mldir/`:
+
+⚠️ **IMPORTANTE**: Le mailing list devono avere l'estensione `.mbox`
 
 ```bash
-# Le mailing list vengono scaricate automaticamente
-# e devono essere posizionate in mldir/
+# Esempio: posiziona i file .mbox nella directory mldir/
+# mldir/gmane.comp.emulators.qemu.mbox
 ```
 
 **Passo 2:** Esegui l'analisi della mailing list:
@@ -183,6 +205,50 @@ codeface st -c codeface.conf -p conf/qemu.conf results/
 - `-c codeface.conf` - file di configurazione generale di CodeFace
 - `-p conf/qemu.conf` - file di configurazione del progetto specifico
 - `results/` - directory contenente i risultati dell'analisi principale (da cui verranno estratti i dati per l'analisi socio-tecnica)
+
+## Testing
+
+CodeFace4Smell include una suite di test per verificare il corretto funzionamento del sistema. Per eseguire i test, è necessario avviare il server in modalità test.
+
+### Passo 1: Avviare il Server in Modalità Test
+
+Prima di eseguire i test, è necessario avviare il server in modalità test con il seguente comando:
+
+```bash
+./start-server.sh test
+```
+
+Questo comando:
+
+- Avvia il server con le configurazioni specifiche per l'ambiente di testing
+- Prepara il sistema per l'esecuzione dei test automatizzati
+
+### Passo 2: Eseguire i Test
+
+Una volta che il server è stato avviato in modalità test, esegui la suite di test con:
+
+```bash
+codeface test -c codeface_testing.conf
+```
+
+**Spiegazione dei parametri:**
+
+- `test` - sottomando per eseguire la suite di test
+- `-c codeface_testing.conf` - file di configurazione specifico per il testing (contiene impostazioni e parametri ottimizzati per l'ambiente di test)
+
+### Passo 3: Attendere il Completamento
+
+Attendi che tutti i test vengano eseguiti. Durante l'esecuzione, verranno visualizzate informazioni sui test in corso e sui loro risultati. Al termine, verifica che tutti i test siano stati completati con successo.
+
+### Tornare alla Modalità Normale
+
+⚠️ **IMPORTANTE**: Dopo aver completato i test, se desideri tornare a eseguire analisi normali, devi riavviare il server **senza** il parametro `test`:
+
+```bash
+./start-server.sh
+```
+
+Questo riporterà il server alla modalità di produzione, permettendoti di eseguire nuovamente le analisi sui progetti.
 
 ## Visualizzazione dei Risultati
 
@@ -236,7 +302,7 @@ Successivamente, accedi nuovamente al container con:
 docker exec -it codeface4smell /bin/bash
 ```
 
-E riavvia i servizi necessari (server e interfaccia web).
+E riavvia i servizi necessari (server e dashboard).
 
 ### Rimuovere Completamente il Container
 
