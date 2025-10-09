@@ -1,7 +1,7 @@
 # CodeFace4Smell - Guida all'Installazione e Utilizzo
 
 <div align="center">
-  <img src="https://web.unisa.it/uploads/images/00_UNISA_CoA.png" alt="Logo Università degli Studi di Salerno" width="200"/>
+  <img src="https://www.unisa.it/rescue/img/logo_standard.png" alt="Logo Università degli Studi di Salerno" width="200"/>
   
   ### Progetto Universitario
   
