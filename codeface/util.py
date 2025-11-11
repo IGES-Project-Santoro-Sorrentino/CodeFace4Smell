@@ -332,7 +332,7 @@ def _convert_dot_file(dotfile):
     '''
     res = []
     edges = {}
-    edge_spec = re.compile("\s+(\d+) -> (\d+);")
+    edge_spec = re.compile(r"\s+(\d+) -> (\d+);")
 
     file = open(dotfile, "r")
     lines = [line.strip("\n") for line in file]
@@ -583,12 +583,27 @@ def check4cppstats():
     """
     # We can not check the version directly as there is no version switch
     # on cppstats We just check if the first line is OK.
-    line = "cppstats v0.9."
+    # Accept both v0.8.x and v0.9.x versions
     cmd = "/usr/bin/env cppstats --version".split()
-    res = execute_command(cmd)
-    if not (res.startswith(line)):
-        error_message = "expected the first line to start with '{0}' but "\
-                        "got '{1}'".format(line, res[0])
+    try:
+        res = execute_command(cmd, silent_errors=True)
+    except Exception as e:
+        error_message = "cppstats command failed or not found: {0}".format(str(e))
+        log.error("program cppstats does not exist, or it is not working as expected ({0})".format(error_message))
+        raise Exception("no working cppstats found ({0})".format(error_message))
+    
+    # Check if output is valid (should start with version info)
+    if not res or len(res.strip()) == 0:
+        error_message = "cppstats --version returned empty output"
+        log.error("program cppstats does not exist, or it is not working as expected ({0})".format(error_message))
+        raise Exception("no working cppstats found ({0})".format(error_message))
+    
+    # Get first line of output
+    first_line = res.split('\n')[0].strip()
+    
+    if not (first_line.startswith("cppstats v0.8.") or first_line.startswith("cppstats v0.9.")):
+        error_message = "expected the first line to start with 'cppstats v0.8.' or 'cppstats v0.9.' but "\
+                        "got '{0}'".format(first_line[:50] if len(first_line) > 0 else first_line)
         log.error("program cppstats does not exist, or it is not working "
                   "as expected ({0}"
                   .format(error_message))

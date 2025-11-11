@@ -101,7 +101,7 @@ RUN echo '#!/usr/bin/env bash\nexec python3 /opt/cppstats/cppstats.py "$@"' > /u
     && chmod +x /usr/local/bin/cppstats
 
 # Preparo codeface dopo eseguito il login
-RUN chmod +x ./start_server.sh
+RUN chmod +x ./start-server.sh
 
 # Expose ports
 EXPOSE 22 8081 8100 3306

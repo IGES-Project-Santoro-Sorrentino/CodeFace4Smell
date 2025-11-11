@@ -149,4 +149,24 @@ div .shiny-plot-output {
 	overflow: hidden;
 }
 
+/* Ensure popovers appear above all cards - multiple selectors for specificity */
+.popover,
+div.popover,
+body > .popover,
+body .popover.in {
+	z-index: 9999 !important;
+	position: absolute !important;
+}
 
+/* Ensure container and gridster don't have overflow hidden that clips popovers */
+.container,
+.gridster,
+.gridster ul,
+li.qawidget {
+	overflow: visible !important;
+}
+
+/* Ensure cards don't create new stacking contexts */
+li.qawidget {
+	z-index: 1 !important;
+}
