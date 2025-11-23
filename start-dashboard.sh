@@ -11,6 +11,18 @@ echo "=== Deploying Modern Nginx Infrastructure ==="
 # Load configuration
 source deploy.conf
 
+# Ensure we only perform heavy setup once per container lifetime.
+STATE_DIR=/var/lib/codeface
+STATE_FILE=$STATE_DIR/dashboard_setup_done
+mkdir -p "$STATE_DIR"
+
+if [ -f "$STATE_FILE" ]; then
+    echo "Detected existing dashboard setup. Skipping provisioning steps."
+    echo "Restarting dashboard-related services..."
+    bash start-services.sh
+    exit 0
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -58,3 +70,5 @@ echo -e "${GREEN}Step 5: Starting services...${NC}"
 bash start-services.sh
 
 echo -e "${GREEN}=== Deployment Complete ===${NC}"
+
+touch "$STATE_FILE"
