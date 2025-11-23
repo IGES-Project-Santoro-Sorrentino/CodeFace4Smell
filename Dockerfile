@@ -101,9 +101,12 @@ RUN echo '#!/usr/bin/env bash\nexec python3 /opt/cppstats/cppstats.py "$@"' > /u
     && chmod +x /usr/local/bin/cppstats
 
 # Preparo codeface dopo eseguito il login
-RUN chmod +x ./start-server.sh
+RUN chmod +x ./start-server.sh \
+    && chmod +x ./start-dashboard.sh \
+    && chmod +x ./container-entrypoint.sh
 
 # Expose ports
 EXPOSE 22 8081 8100 3306
 # RUN service mysql start
 CMD ["/usr/sbin/sshd", "-D"]
+#CMD ["/codeface/container-entrypoint.sh"]
