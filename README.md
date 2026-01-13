@@ -1,15 +1,14 @@
 # CodeFace4Smell - Guida all'Installazione e Utilizzo
 
 <div align="center">
-  <img src="https://www.unisa.it/rescue/img/logo_standard.png" alt="Logo Università degli Studi di Salerno" width="200"/>
   
   ### Progetto Universitario
+
+  📚 **Università degli Studi di Salerno**
   
   **Sviluppato da:**
   - **Gabriele Santoro**
   - **Pasquale Sorrentino**
-  
-  📚 **Università degli Studi di Salerno**
   
   🎓 **Corso di Laurea Magistrale in Informatica (L-18)**
   
