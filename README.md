@@ -1,4 +1,4 @@
-# CodeFace4Smell - Guida all'Installazione e Utilizzo
+# CodeFace4Smell
 
 <div align="center">
   
