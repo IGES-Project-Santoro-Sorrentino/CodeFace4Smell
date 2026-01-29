@@ -428,7 +428,15 @@ def conway_analyse(resdir, gitdir, titandir, codeface_conf, project_conf,
 def sociotechnical_analyse(resdir, codeface_conf, project_conf, loglevel,
                            logfile, n_jobs):
     conf = Configuration.load(codeface_conf, project_conf)
-    project_resdir = pathjoin(resdir, conf["project"])
+    
+    # Normalize resdir: if it already ends with the project name, don't add it again
+    # This handles cases where resdir is already the project directory
+    if resdir.endswith(conf["project"]):
+        project_resdir = resdir
+    else:
+        project_resdir = pathjoin(resdir, conf["project"])
+    
+    log.info("=> Using project results directory: %s" % project_resdir)
 
     exe = abspath(resource_filename(__name__, "R/sociotechnical.r"))
     cwd, _ = pathsplit(exe)
